@@ -1,5 +1,3 @@
-use crate::lexer::token::TokenType::{FUNCTION, LET, IDENT};
-
 #[derive(Debug)]
 pub struct Token {
     pub typ: TokenType,
@@ -18,6 +16,14 @@ pub enum TokenType {
     // Operators
     ASSIGN,
     PLUS,
+    MINUS,
+    BANG,
+    ASTERISK,
+    SLASH,
+    LT,
+    GT,
+    EQ,
+    NOT_EQ,
 
     // Delimiters
     COMMA,
@@ -30,12 +36,24 @@ pub enum TokenType {
     // Keywords
     FUNCTION,
     LET,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+    RETURN
+
 }
 
 pub fn lookup_ident(keyword: &str) -> TokenType {
+    use crate::lexer::token::TokenType::*;
     match keyword {
         "fn" => FUNCTION,
         "let" => LET,
+        "true" => TRUE,
+        "false" => FALSE,
+        "if" => IF,
+        "else" => ELSE,
+        "return" => RETURN,
         _ => IDENT
     }
 }
