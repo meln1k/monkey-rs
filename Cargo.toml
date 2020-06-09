@@ -1,0 +1,5 @@
+[package]
+name = "interpreter"
+version = "0.1.0"
+authors = ["Nikita Melkozerov <n.melkozerov@gmail.com>"]
+edition = "2018"
