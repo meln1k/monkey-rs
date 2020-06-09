@@ -14,8 +14,9 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn read_identifier(&mut self) -> String {
+    fn read_identifier(&mut self, first: char) -> String {
         let mut literal = String::new();
+        literal.push(first);
         while let Some(&ch) = self.peekable.peek() {
             if ch.is_alphabetic() {
                 literal.push(ch);
@@ -27,8 +28,9 @@ impl<'a> Lexer<'a> {
         literal
     }
 
-    fn read_number(&mut self) -> String {
+    fn read_number(&mut self, first: char) -> String {
         let mut literal = String::new();
+        literal.push(first);
         while let Some(&ch) = self.peekable.peek() {
             if ch.is_ascii_digit() {
                 literal.push(ch);
@@ -59,14 +61,12 @@ impl<'a> Iterator for Lexer<'a> {
 
 
 
+        let peekable = &mut self.peekable;
 
-        match self.peekable.peek() {
-            Some(&char) => {
-
-                let peekable = &mut self.peekable;
+        match peekable.next() {
+            Some(char) => {
 
                 let mut create_token = |typ: TokenType| {
-                    peekable.next();
                     Token { typ, literal: char.to_string() }
                 };
 
@@ -79,7 +79,6 @@ impl<'a> Iterator for Lexer<'a> {
                     '{' => create_token(LBRACE),
                     '}' => create_token(RBRACE),
                     '=' => {
-                        peekable.next();
                         match peekable.peek() {
                             Some('=') => {
                                 peekable.next();
@@ -92,7 +91,6 @@ impl<'a> Iterator for Lexer<'a> {
                     },
                     '-' => create_token(MINUS),
                     '!' => {
-                        peekable.next();
                         match peekable.peek() {
                             Some('=') => {
                                 peekable.next();
@@ -108,12 +106,12 @@ impl<'a> Iterator for Lexer<'a> {
                     '<' => create_token(LT),
                     '>' => create_token(GT),
                     c if c.is_alphabetic() || char == '_' => {
-                        let literal = self.read_identifier();
+                        let literal = self.read_identifier(c);
                         let typ = lookup_ident(&literal);
                         Token { typ, literal }
                     }
                     d if d.is_ascii_digit() => {
-                        let literal = self.read_number();
+                        let literal = self.read_number(d);
                         Token { typ: INT, literal }
                     }
                     _ => Token { typ: ILLEGAL, literal: char.to_string() }
