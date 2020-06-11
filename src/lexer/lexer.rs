@@ -3,20 +3,20 @@ use std::iter::Peekable;
 use std::str::Chars;
 use crate::lexer::token::TokenType::*;
 
-struct Lexer<'a> {
+pub struct Lexer<'a> {
     peekable: Peekable<Chars<'a>>
 }
 
 impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Lexer<'a> {
+    pub fn new(input: &'a str) -> Lexer<'a> {
         Lexer {
             peekable: input.chars().peekable()
         }
     }
 
-    fn read_identifier(&mut self, first: char) -> String {
+    fn read_identifier(&mut self, head: char) -> String {
         let mut literal = String::new();
-        literal.push(first);
+        literal.push(head);
         while let Some(&ch) = self.peekable.peek() {
             if ch.is_alphabetic() {
                 literal.push(ch);
@@ -28,9 +28,9 @@ impl<'a> Lexer<'a> {
         literal
     }
 
-    fn read_number(&mut self, first: char) -> String {
+    fn read_number(&mut self, head: char) -> String {
         let mut literal = String::new();
-        literal.push(first);
+        literal.push(head);
         while let Some(&ch) = self.peekable.peek() {
             if ch.is_ascii_digit() {
                 literal.push(ch);
@@ -66,7 +66,7 @@ impl<'a> Iterator for Lexer<'a> {
         match peekable.next() {
             Some(char) => {
 
-                let mut create_token = |typ: TokenType| {
+                let create_token = |typ: TokenType| {
                     Token { typ, literal: char.to_string() }
                 };
 
