@@ -14,7 +14,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
         let peekable = &mut self.peekable;
@@ -123,7 +123,6 @@ impl<'a> Iterator for Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
 
     use crate::lexer::token::Token;
     use crate::lexer::token::Token::*;
