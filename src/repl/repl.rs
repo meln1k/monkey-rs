@@ -1,4 +1,4 @@
-use std::io::{self, BufRead};
+use std::io;
 use crate::lexer::lexer::Lexer;
 
 static PROMT: &str = ">> ";

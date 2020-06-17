@@ -1,17 +1,11 @@
-#[derive(Debug)]
-pub struct Token {
-    pub typ: TokenType,
-    pub literal: String,
-}
-
 #[derive(PartialEq, Eq, Debug)]
-pub enum TokenType {
+pub enum Token {
     ILLEGAL,
-    // EOF,
+    EOF,
 
     // Identifiers + literals
-    IDENT,
-    INT,
+    IDENT(String),
+    INT(String),
 
     // Operators
     ASSIGN,
@@ -44,9 +38,9 @@ pub enum TokenType {
 
 }
 
-pub fn lookup_ident(keyword: &str) -> TokenType {
-    use crate::lexer::token::TokenType::*;
-    match keyword {
+pub fn lookup_ident(keyword: String) -> Token {
+    use crate::lexer::token::Token::*;
+    match keyword.as_str() {
         "fn" => FUNCTION,
         "let" => LET,
         "true" => TRUE,
@@ -54,6 +48,6 @@ pub fn lookup_ident(keyword: &str) -> TokenType {
         "if" => IF,
         "else" => ELSE,
         "return" => RETURN,
-        _ => IDENT
+        _ => IDENT(keyword)
     }
 }

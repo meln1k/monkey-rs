@@ -1,7 +1,7 @@
-use crate::lexer::token::{Token, lookup_ident, TokenType};
+use crate::lexer::token::{Token, lookup_ident};
 use std::iter::Peekable;
 use std::str::Chars;
-use crate::lexer::token::TokenType::*;
+use crate::lexer::token::Token::*;
 
 pub struct Lexer<'a> {
     peekable: Peekable<Chars<'a>>
@@ -11,6 +11,63 @@ impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Lexer<'a> {
         Lexer {
             peekable: input.chars().peekable()
+        }
+    }
+
+    fn next_token(&mut self) -> Token {
+        self.skip_whitespace();
+
+        let peekable = &mut self.peekable;
+
+        match peekable.next() {
+            Some(char) => {
+                match char {
+                    ';' => SEMICOLON,
+                    '(' => LPAREN,
+                    ')' => RPAREN,
+                    ',' => COMMA,
+                    '+' => PLUS,
+                    '{' => LBRACE,
+                    '}' => RBRACE,
+                    '=' => {
+                        match peekable.peek() {
+                            Some('=') => {
+                                peekable.next();
+                                EQ
+                            }
+                            _ => {
+                                ASSIGN
+                            }
+                        }
+                    }
+                    '-' => MINUS,
+                    '!' => {
+                        match peekable.peek() {
+                            Some('=') => {
+                                peekable.next();
+                                NOT_EQ
+                            }
+                            _ => {
+                                BANG
+                            }
+                        }
+                    }
+                    '/' => SLASH,
+                    '*' => ASTERISK,
+                    '<' => LT,
+                    '>' => GT,
+                    c if c.is_alphabetic() || char == '_' => {
+                        let literal = self.read_identifier(c);
+                        lookup_ident(literal)
+                    }
+                    d if d.is_ascii_digit() => {
+                        let literal = self.read_number(d);
+                        INT(literal)
+                    }
+                    _ => ILLEGAL
+                }
+            }
+            None => EOF
         }
     }
 
@@ -57,68 +114,9 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.skip_whitespace();
-
-
-
-        let peekable = &mut self.peekable;
-
-        match peekable.next() {
-            Some(char) => {
-
-                let create_token = |typ: TokenType| {
-                    Token { typ, literal: char.to_string() }
-                };
-
-                let token = match char {
-                    ';' => create_token(SEMICOLON),
-                    '(' => create_token(LPAREN),
-                    ')' => create_token(RPAREN),
-                    ',' => create_token(COMMA),
-                    '+' => create_token(PLUS),
-                    '{' => create_token(LBRACE),
-                    '}' => create_token(RBRACE),
-                    '=' => {
-                        match peekable.peek() {
-                            Some('=') => {
-                                peekable.next();
-                                Token { typ: EQ, literal: "==".to_owned() }
-                            }
-                            _ => {
-                                Token { typ: ASSIGN, literal: char.to_string() }
-                            }
-                        }
-                    },
-                    '-' => create_token(MINUS),
-                    '!' => {
-                        match peekable.peek() {
-                            Some('=') => {
-                                peekable.next();
-                                Token { typ: NOT_EQ, literal: "!=".to_owned() }
-                            }
-                            _ => {
-                                Token { typ: BANG, literal: char.to_string() }
-                            }
-                        }
-                    },
-                    '/' => create_token(SLASH),
-                    '*' => create_token(ASTERISK),
-                    '<' => create_token(LT),
-                    '>' => create_token(GT),
-                    c if c.is_alphabetic() || char == '_' => {
-                        let literal = self.read_identifier(c);
-                        let typ = lookup_ident(&literal);
-                        Token { typ, literal }
-                    }
-                    d if d.is_ascii_digit() => {
-                        let literal = self.read_number(d);
-                        Token { typ: INT, literal }
-                    }
-                    _ => Token { typ: ILLEGAL, literal: char.to_string() }
-                };
-                Some(token)
-            }
-            None => None
+        match self.next_token() {
+            EOF => None,
+            other => Some(other)
         }
     }
 }
@@ -127,8 +125,8 @@ impl<'a> Iterator for Lexer<'a> {
 mod tests {
     // use super::*;
 
-    use crate::lexer::token::TokenType;
-    use crate::lexer::token::TokenType::*;
+    use crate::lexer::token::Token;
+    use crate::lexer::token::Token::*;
     use crate::lexer::lexer::Lexer;
 
     #[test]
@@ -155,101 +153,91 @@ mod tests {
         ";
 
         #[derive(Debug)]
-        struct TestInput(TokenType, String);
+        struct TestInput(Token);
 
         let tests = vec![
-            TestInput(LET, "let".to_owned()),
-            TestInput(IDENT, "five".to_owned()),
-            TestInput(ASSIGN, "=".to_owned()),
-            TestInput(INT, "5".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(LET, "let".to_owned()),
-            TestInput(IDENT, "ten".to_owned()),
-            TestInput(ASSIGN, "=".to_owned()),
-            TestInput(INT, "10".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(LET, "let".to_owned()),
-            TestInput(IDENT, "add".to_owned()),
-            TestInput(ASSIGN, "=".to_owned()),
-            TestInput(FUNCTION, "fn".to_owned()),
-            TestInput(LPAREN, "(".to_owned()),
-            TestInput(IDENT, "x".to_owned()),
-            TestInput(COMMA, ",".to_owned()),
-            TestInput(IDENT, "y".to_owned()),
-            TestInput(RPAREN, ")".to_owned()),
-            TestInput(LBRACE, "{".to_owned()),
-            TestInput(IDENT, "x".to_owned()),
-            TestInput(PLUS, "+".to_owned()),
-            TestInput(IDENT, "y".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(RBRACE, "}".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-
-            TestInput(LET, "let".to_owned()),
-            TestInput(IDENT, "result".to_owned()),
-            TestInput(ASSIGN, "=".to_owned()),
-            TestInput(IDENT, "add".to_owned()),
-            TestInput(LPAREN, "(".to_owned()),
-            TestInput(IDENT, "five".to_owned()),
-            TestInput(COMMA, ",".to_owned()),
-            TestInput(IDENT, "ten".to_owned()),
-            TestInput(RPAREN, ")".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(BANG, "!".to_owned()),
-            TestInput(MINUS, "-".to_owned()),
-            TestInput(SLASH, "/".to_owned()),
-            TestInput(ASTERISK, "*".to_owned()),
-            TestInput(INT, "5".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(INT, "5".to_owned()),
-            TestInput(LT, "<".to_owned()),
-            TestInput(INT, "10".to_owned()),
-            TestInput(GT, ">".to_owned()),
-            TestInput(INT, "5".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-
-            TestInput(IF, "if".to_owned()),
-            TestInput(LPAREN, "(".to_owned()),
-            TestInput(INT, "5".to_owned()),
-            TestInput(LT, "<".to_owned()),
-            TestInput(INT, "10".to_owned()),
-            TestInput(RPAREN, ")".to_owned()),
-            TestInput(LBRACE, "{".to_owned()),
-            TestInput(RETURN, "return".to_owned()),
-            TestInput(TRUE, "true".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(RBRACE, "}".to_owned()),
-            TestInput(ELSE, "else".to_owned()),
-            TestInput(LBRACE, "{".to_owned()),
-            TestInput(RETURN, "return".to_owned()),
-            TestInput(FALSE, "false".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(RBRACE, "}".to_owned()),
-
-            TestInput(INT, "10".to_owned()),
-            TestInput(EQ, "==".to_owned()),
-            TestInput(INT, "10".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
-            TestInput(INT, "10".to_owned()),
-            TestInput(NOT_EQ, "!=".to_owned()),
-            TestInput(INT, "9".to_owned()),
-            TestInput(SEMICOLON, ";".to_owned()),
+            TestInput(LET),
+            TestInput(IDENT("five".to_owned())),
+            TestInput(ASSIGN),
+            TestInput(INT("5".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(LET),
+            TestInput(IDENT("ten".to_owned())),
+            TestInput(ASSIGN),
+            TestInput(INT("10".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(LET),
+            TestInput(IDENT("add".to_owned())),
+            TestInput(ASSIGN),
+            TestInput(FUNCTION),
+            TestInput(LPAREN),
+            TestInput(IDENT("x".to_owned())),
+            TestInput(COMMA),
+            TestInput(IDENT("y".to_owned())),
+            TestInput(RPAREN),
+            TestInput(LBRACE),
+            TestInput(IDENT("x".to_owned())),
+            TestInput(PLUS),
+            TestInput(IDENT("y".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(RBRACE),
+            TestInput(SEMICOLON),
+            TestInput(LET),
+            TestInput(IDENT("result".to_owned())),
+            TestInput(ASSIGN),
+            TestInput(IDENT("add".to_owned())),
+            TestInput(LPAREN),
+            TestInput(IDENT("five".to_owned())),
+            TestInput(COMMA),
+            TestInput(IDENT("ten".to_owned())),
+            TestInput(RPAREN),
+            TestInput(SEMICOLON),
+            TestInput(BANG),
+            TestInput(MINUS),
+            TestInput(SLASH),
+            TestInput(ASTERISK),
+            TestInput(INT("5".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(INT("5".to_owned())),
+            TestInput(LT),
+            TestInput(INT("10".to_owned())),
+            TestInput(GT),
+            TestInput(INT("5".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(IF),
+            TestInput(LPAREN),
+            TestInput(INT("5".to_owned())),
+            TestInput(LT),
+            TestInput(INT("10".to_owned())),
+            TestInput(RPAREN),
+            TestInput(LBRACE),
+            TestInput(RETURN),
+            TestInput(TRUE),
+            TestInput(SEMICOLON),
+            TestInput(RBRACE),
+            TestInput(ELSE),
+            TestInput(LBRACE),
+            TestInput(RETURN),
+            TestInput(FALSE),
+            TestInput(SEMICOLON),
+            TestInput(RBRACE),
+            TestInput(INT("10".to_owned())),
+            TestInput(EQ),
+            TestInput(INT("10".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(INT("10".to_owned())),
+            TestInput(NOT_EQ),
+            TestInput(INT("9".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(EOF)
         ];
 
         let mut lexer = Lexer::new(input);
 
 
         for test in tests.iter() {
-            match lexer.next() {
-                Some(token) => {
-                    assert_eq!(token.typ, test.0, "test input: {:?}", test);
-                    assert_eq!(token.literal, test.1);
-                }
-                None => {
-                    panic!("Input ended unexpectedly")
-                }
-            }
+            let token = lexer.next_token();
+            assert_eq!(token, test.0, "test input: {:?}", test)
         }
-        assert_eq!(lexer.next().is_none(), true)
     }
 }
