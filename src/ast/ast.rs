@@ -16,7 +16,7 @@ pub enum Statement {
     Expr(ExpressionStatement),
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Expression {
     Identifier(String)
 }

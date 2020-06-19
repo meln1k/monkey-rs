@@ -1,8 +1,9 @@
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::lexer::token::Token::*;
-use crate::ast::ast::{Program, Statement, LetStatement, Expression, ReturnStatement};
-use crate::ast::ast::Expression::Identifier;
+use crate::ast::ast::{Program, Statement, LetStatement, ReturnStatement, ExpressionStatement, Expression};
+use crate::parser::Precedence::LOWEST;
+use std::fmt::format;
 
 
 type ParsingError = String;
@@ -13,6 +14,17 @@ struct Parser<'a> {
     lexer: Lexer<'a>,
     cur_token: Token,
     peek_token: Token,
+}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq)]
+enum Precedence {
+    LOWEST,
+    EQUALS,
+    LESSGREATER,
+    SUM,
+    PRODUCT,
+    PREFIX,
+    CALL,
 }
 
 impl<'a> Parser<'a> {
@@ -54,7 +66,7 @@ impl<'a> Parser<'a> {
         match self.cur_token {
             LET => self.parse_let_statement().map(|s| Statement::Let(s)),
             RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
-            _ => Err(format!("unknown token: {:?}", self.cur_token))
+            _ => self.parse_expr_statement().map(|s| Statement::Expr(s))
         }
     }
 
@@ -74,16 +86,39 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_statement(&mut self) -> ParsingResult<ReturnStatement> {
-
         self.next_token();
 
         while !self.current_token_is(SEMICOLON) {
             self.next_token();
         }
 
+        Ok(ReturnStatement { return_value: Expression::Identifier("not implemented yet".to_owned()) })
+    }
 
-        Ok(ReturnStatement{return_value: Identifier("not implemented yet".to_owned())})
+    fn parse_expr_statement(&mut self) -> ParsingResult<ExpressionStatement> {
+        let maybe_expr = self.parse_expression(LOWEST);
 
+        if self.peek_token_is(&SEMICOLON) {
+            self.next_token()
+        }
+
+        maybe_expr.map(|expression| ExpressionStatement { expression })
+    }
+
+    fn parse_expression(&mut self, precedence: Precedence) -> ParsingResult<Expression> {
+        let prefix_fn = self.prefix_parse_fn(&self.cur_token);
+
+        match prefix_fn {
+            Some(func) => func(self),
+            None => Err(format!("No parsing function found for parsing expression {:?}", self.cur_token))
+        }
+    }
+
+    fn parse_identifier(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
+        match &parser.cur_token {
+            IDENT(name) => Ok(Expression::Identifier(name.clone())),
+            other => Err(format!("expected identifier but got {:?}", other))
+        }
     }
 
     fn current_token_is(&self, t: Token) -> bool {
@@ -116,13 +151,24 @@ impl<'a> Parser<'a> {
             Err(format!("Expected next token to be {:?} but got {:?}", t, self.peek_token))
         }
     }
+
+    fn prefix_parse_fn(&self, token: &Token) -> Option<PrefixParseFn> {
+        match token {
+            IDENT(_) => Some(Parser::parse_identifier),
+            _ => None
+        }
+    }
 }
+
+type PrefixParseFn = fn(parser: &mut Parser<'_>) -> ParsingResult<Expression>;
+type InfixParseFn = fn(parser: &mut Parser<'_>, left: Expression) -> ParsingResult<Expression>;
 
 #[cfg(test)]
 mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::Parser;
-    use crate::ast::ast::{Statement, ReturnStatement};
+    use crate::ast::ast::{Statement, ReturnStatement, ExpressionStatement, Expression};
+    use crate::ast::ast::Expression::Identifier;
 
     #[test]
     fn test_let_statements() {
@@ -175,13 +221,35 @@ mod tests {
 
         for (id, &test_str) in tests.iter().enumerate() {
             match &statements[id] {
-                Statement::Return(ReturnStatement{return_value}) => {
+                Statement::Return(ReturnStatement { return_value }) => {
                     ()
-                },
+                }
                 other => {
                     panic!("Expected Return but got {:?}", other)
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_identifier_expr() {
+        let input = "foobar;";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+
+        let program = parser.parse_program().expect("program should be parsable");
+        let statements = program.statements;
+
+        assert_eq!(statements.len(), 1, "program.Statements does not contain 1 statement.");
+
+        let statement = &statements[0];
+
+        match statement {
+            Statement::Expr(ExpressionStatement { expression }) => {
+                assert_eq!(expression, &Identifier("foobar".to_owned()))
+            }
+            other => panic!("expected an identifier but got {:?}", other)
         }
     }
 }
