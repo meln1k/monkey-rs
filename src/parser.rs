@@ -1,16 +1,18 @@
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::lexer::token::Token::*;
-use crate::ast::ast::{Program, Statement, LetStatement, Expression};
+use crate::ast::ast::{Program, Statement, LetStatement, Expression, ReturnStatement};
+use crate::ast::ast::Expression::Identifier;
 
 
 type ParsingError = String;
+type ParsingErrors = Vec<ParsingError>;
 type ParsingResult<T> = Result<T, ParsingError>;
 
 struct Parser<'a> {
     lexer: Lexer<'a>,
     cur_token: Token,
-    peek_token: Token
+    peek_token: Token,
 }
 
 impl<'a> Parser<'a> {
@@ -20,7 +22,7 @@ impl<'a> Parser<'a> {
         Parser {
             lexer,
             cur_token: current,
-            peek_token: peek
+            peek_token: peek,
         }
     }
 
@@ -28,25 +30,30 @@ impl<'a> Parser<'a> {
         self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token());
     }
 
-    fn parse_program(mut self) -> ParsingResult<Program> {
+    fn parse_program(mut self) -> Result<Program, ParsingErrors> {
         let mut statements = Vec::new();
+        let mut errors = Vec::new();
 
         while self.cur_token != Token::EOF {
-            let statement = self.parse_statement()?;
-
-            statements.push(statement);
+            match self.parse_statement() {
+                Ok(s) => statements.push(s),
+                Err(reason) => errors.push(reason)
+            }
             self.next_token();
         }
 
-        Ok(Program {
-            statements
-        })
+        if errors.is_empty() {
+            Ok(Program { statements })
+        } else {
+            Err(errors)
+        }
     }
 
 
     fn parse_statement(&mut self) -> ParsingResult<Statement> {
         match self.cur_token {
             LET => self.parse_let_statement().map(|s| Statement::Let(s)),
+            RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
             _ => Err(format!("unknown token: {:?}", self.cur_token))
         }
     }
@@ -64,6 +71,19 @@ impl<'a> Parser<'a> {
             name: ident_name,
             value: Expression::Identifier("replace me".to_string()),
         })
+    }
+
+    fn parse_return_statement(&mut self) -> ParsingResult<ReturnStatement> {
+
+        self.next_token();
+
+        while !self.current_token_is(SEMICOLON) {
+            self.next_token();
+        }
+
+
+        Ok(ReturnStatement{return_value: Identifier("not implemented yet".to_owned())})
+
     }
 
     fn current_token_is(&self, t: Token) -> bool {
@@ -102,7 +122,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::Parser;
-    use crate::ast::ast::{Statement};
+    use crate::ast::ast::{Statement, ReturnStatement};
 
     #[test]
     fn test_let_statements() {
@@ -131,6 +151,36 @@ mod tests {
         match statement {
             Statement::Let(s) => {
                 assert_eq!(s.name, name)
+            }
+            other => panic!("Expected Let but got {:?}", other)
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        let input = "
+        return 5;
+        return 10;
+        return 42;";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+
+        let program = parser.parse_program().expect("program should be parsable");
+        let statements = program.statements;
+
+        assert_eq!(statements.len(), 3, "program.Statements does not contain 3 statements. got {}", statements.len());
+
+        let tests = vec!["5", "10", "42"];
+
+        for (id, &test_str) in tests.iter().enumerate() {
+            match &statements[id] {
+                Statement::Return(ReturnStatement{return_value}) => {
+                    ()
+                },
+                other => {
+                    panic!("Expected Return but got {:?}", other)
+                }
             }
         }
     }
