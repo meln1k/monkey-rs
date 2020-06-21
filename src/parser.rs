@@ -121,6 +121,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_integer_literal(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
+        match &parser.cur_token {
+            INT(value) => value.parse().map_err(|_| format!("can't parse value {:?} as int", value)).map(Expression::IntegerLiteral),
+            other => Err(format!("Expected INT but got {:?}", other))
+        }
+    }
+
     fn current_token_is(&self, t: Token) -> bool {
         self.cur_token == t
     }
@@ -155,6 +162,7 @@ impl<'a> Parser<'a> {
     fn prefix_parse_fn(&self, token: &Token) -> Option<PrefixParseFn> {
         match token {
             IDENT(_) => Some(Parser::parse_identifier),
+            INT(_) => Some(Parser::parse_integer_literal),
             _ => None
         }
     }
@@ -168,7 +176,7 @@ mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::Parser;
     use crate::ast::ast::{Statement, ReturnStatement, ExpressionStatement, Expression};
-    use crate::ast::ast::Expression::Identifier;
+    use crate::ast::ast::Expression::*;
 
     #[test]
     fn test_let_statements() {
@@ -250,6 +258,28 @@ mod tests {
                 assert_eq!(expression, &Identifier("foobar".to_owned()))
             }
             other => panic!("expected an identifier but got {:?}", other)
+        }
+    }
+
+    #[test]
+    fn test_integer_literal_expr() {
+        let input = "5;";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+
+        let program = parser.parse_program().expect("program should be parsable");
+        let statements = program.statements;
+
+        assert_eq!(statements.len(), 1, "program.Statements does not contain 1 statement.");
+
+        let statement = &statements[0];
+
+        match statement {
+            Statement::Expr(ExpressionStatement { expression }) => {
+                assert_eq!(expression, &IntegerLiteral(5))
+            }
+            other => panic!("expected an integer literal but got {:?}", other)
         }
     }
 }

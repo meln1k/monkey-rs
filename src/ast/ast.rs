@@ -18,7 +18,8 @@ pub enum Statement {
 
 #[derive(PartialEq, Debug)]
 pub enum Expression {
-    Identifier(String)
+    Identifier(String),
+    IntegerLiteral(i64)
 }
 
 #[derive(Debug)]
@@ -76,6 +77,9 @@ impl Display for Expression {
         match self {
             Expression::Identifier(s) => {
                 write!(f, "{}", s)
+            },
+            Expression::IntegerLiteral(n) => {
+                write!(f, "{}", n)
             }
         }
     }
