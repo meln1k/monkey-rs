@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 #[derive(PartialEq, Eq, Debug)]
 #[allow(non_camel_case_types)]
 pub enum Token {
@@ -36,7 +38,6 @@ pub enum Token {
     IF,
     ELSE,
     RETURN
-
 }
 
 pub fn lookup_ident(keyword: String) -> Token {

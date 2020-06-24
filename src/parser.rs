@@ -2,7 +2,7 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::lexer::token::Token::*;
 use crate::ast::ast::{Program, Statement, LetStatement, ReturnStatement, ExpressionStatement, Expression};
-use crate::parser::Precedence::LOWEST;
+use crate::parser::Precedence::{LOWEST, PREFIX};
 use std::fmt::format;
 
 
@@ -38,7 +38,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn next_token(&mut self) {
+    fn advance_token(&mut self) {
         self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token());
     }
 
@@ -51,7 +51,7 @@ impl<'a> Parser<'a> {
                 Ok(s) => statements.push(s),
                 Err(reason) => errors.push(reason)
             }
-            self.next_token();
+            self.advance_token();
         }
 
         if errors.is_empty() {
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
 
         // todo: do not just skip
         while !self.current_token_is(SEMICOLON) {
-            self.next_token();
+            self.advance_token();
         }
 
         Ok(LetStatement {
@@ -86,10 +86,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_statement(&mut self) -> ParsingResult<ReturnStatement> {
-        self.next_token();
+        self.advance_token();
 
         while !self.current_token_is(SEMICOLON) {
-            self.next_token();
+            self.advance_token();
         }
 
         Ok(ReturnStatement { return_value: Expression::Identifier("not implemented yet".to_owned()) })
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
         let maybe_expr = self.parse_expression(LOWEST);
 
         if self.peek_token_is(&SEMICOLON) {
-            self.next_token()
+            self.advance_token()
         }
 
         maybe_expr.map(|expression| ExpressionStatement { expression })
@@ -110,7 +110,7 @@ impl<'a> Parser<'a> {
 
         match prefix_fn {
             Some(func) => func(self),
-            None => Err(format!("No parsing function found for parsing expression {:?}", self.cur_token))
+            None => Err(format!("no prefix parse function for {:?} found", self.cur_token))
         }
     }
 
@@ -128,12 +128,26 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_prefix_expression(parser: &mut Parser) -> ParsingResult<Expression> {
+        let token_str = match &parser.cur_token {
+            BANG => Ok("!".to_owned()),
+            MINUS => Ok("-".to_owned()),
+            other => Err(format!("Expected prefix token but got {:?}", other))
+        };
+
+        parser.advance_token();
+
+        token_str.and_then(|operator| parser
+            .parse_expression(PREFIX)
+            .map(|expr| Expression::PrefixExpression { operator, expr: Box::new(expr) }))
+    }
+
     fn current_token_is(&self, t: Token) -> bool {
         self.cur_token == t
     }
 
     fn peek_token_is(&self, t: &Token) -> bool {
-        &self.peek_token == t
+        self.peek_token == *t
     }
 
     fn expect_ident(&mut self) -> ParsingResult<String> {
@@ -143,7 +157,7 @@ impl<'a> Parser<'a> {
         };
 
         match result {
-            Ok(_) => self.next_token(),
+            Ok(_) => self.advance_token(),
             _ => ()
         }
 
@@ -152,7 +166,7 @@ impl<'a> Parser<'a> {
 
     fn expect_peek(&mut self, t: Token) -> ParsingResult<()> {
         if self.peek_token_is(&t) {
-            self.next_token();
+            self.advance_token();
             Ok(())
         } else {
             Err(format!("Expected next token to be {:?} but got {:?}", t, self.peek_token))
@@ -163,6 +177,8 @@ impl<'a> Parser<'a> {
         match token {
             IDENT(_) => Some(Parser::parse_identifier),
             INT(_) => Some(Parser::parse_integer_literal),
+            BANG => Some(Parser::parse_prefix_expression),
+            MINUS => Some(Parser::parse_prefix_expression),
             _ => None
         }
     }
@@ -196,8 +212,8 @@ mod tests {
 
         let tests = vec!["x", "y", "foobar"];
 
-        for (id, &test_str) in tests.iter().enumerate() {
-            test_let_statement(&statements[id], test_str)
+        for (id, test_str) in tests.iter().enumerate() {
+            test_let_statement(&statements[id], *test_str)
         }
     }
 
@@ -280,6 +296,48 @@ mod tests {
                 assert_eq!(expression, &IntegerLiteral(5))
             }
             other => panic!("expected an integer literal but got {:?}", other)
+        }
+    }
+
+    #[test]
+    fn test_parsing_prefix_expr() {
+        type Input = String;
+        type Operator = String;
+        type IntValue = i64;
+
+        struct PrefixTests(Input, Operator, IntValue);
+
+        let prefix_tests = vec![
+            PrefixTests("!5;".to_owned(), "!".to_owned(), 5),
+            PrefixTests("-15;".to_owned(), "-".to_owned(), 15)
+        ];
+
+        for test in prefix_tests {
+            let lexer = Lexer::new(&test.0);
+            let program = Parser::new(lexer).parse_program().expect("program should be parsable");
+            let statements = program.statements;
+
+            assert_eq!(statements.len(), 1, "program.Statements should contain 1 statement.");
+
+            match &statements[0] {
+                Statement::Expr(ExpressionStatement { expression }) => match expression {
+                    Expression::PrefixExpression { operator, expr } => {
+                        assert_eq!(*operator, test.1);
+                        test_integer_literal(expr, test.2)
+                    }
+                    other => panic!("expected PrefixExpression but got {:?}", other)
+                },
+                other => panic!("expected Expr but got {:?}", other)
+            }
+        }
+    }
+
+    fn test_integer_literal(expr: &Expression, value: i64) {
+        match expr {
+            Expression::IntegerLiteral(int) => {
+                assert_eq!(*int, value)
+            }
+            other => panic!("expected integer literal but got {:?}", other)
         }
     }
 }

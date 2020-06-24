@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fmt;
+use crate::lexer::token::Token;
 
 
 #[derive(Debug)]
@@ -19,7 +20,11 @@ pub enum Statement {
 #[derive(PartialEq, Debug)]
 pub enum Expression {
     Identifier(String),
-    IntegerLiteral(i64)
+    IntegerLiteral(i64),
+    PrefixExpression {
+        operator: String,
+        expr: Box<Expression>
+    }
 }
 
 #[derive(Debug)]
@@ -80,6 +85,9 @@ impl Display for Expression {
             },
             Expression::IntegerLiteral(n) => {
                 write!(f, "{}", n)
+            },
+            Expression::PrefixExpression{operator, expr} => {
+                write!(f, "({}{})", operator, expr)
             }
         }
     }
