@@ -37,7 +37,7 @@ pub enum Token {
     FALSE,
     IF,
     ELSE,
-    RETURN
+    RETURN,
 }
 
 pub fn lookup_ident(keyword: String) -> Token {
@@ -50,6 +50,6 @@ pub fn lookup_ident(keyword: String) -> Token {
         "if" => IF,
         "else" => ELSE,
         "return" => RETURN,
-        _ => IDENT(keyword)
+        _ => IDENT(keyword),
     }
 }

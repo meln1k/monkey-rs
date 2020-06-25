@@ -1,10 +1,9 @@
-use std::io;
 use crate::lexer::lexer::Lexer;
+use std::io;
 
 static PROMT: &str = ">> ";
 
 pub fn start() {
-
     let mut buffer = String::new();
 
     let stdin = io::stdin();
@@ -20,12 +19,11 @@ pub fn start() {
                 }
             }
             Err(err) => {
-                println!("{:?}",err);
-                return
+                println!("{:?}", err);
+                return;
             }
         }
 
         buffer.clear();
-
     }
 }

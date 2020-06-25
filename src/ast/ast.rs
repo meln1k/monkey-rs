@@ -1,7 +1,6 @@
-use std::fmt::{Display, Formatter};
-use std::fmt;
 use crate::lexer::token::Token;
-
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Node {
@@ -23,13 +22,18 @@ pub enum Expression {
     IntegerLiteral(i64),
     PrefixExpression {
         operator: String,
-        expr: Box<Expression>
-    }
+        expr: Box<Expression>,
+    },
+    InfixExpression {
+        left: Box<Expression>,
+        operator: String,
+        right: Box<Expression>,
+    },
 }
 
 #[derive(Debug)]
 pub struct Program {
-    pub statements: Vec<Statement>
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug)]
@@ -40,14 +44,13 @@ pub struct LetStatement {
 
 #[derive(Debug)]
 pub struct ReturnStatement {
-    pub return_value: Expression
+    pub return_value: Expression,
 }
 
 #[derive(Debug)]
 pub struct ExpressionStatement {
-    pub expression: Expression
+    pub expression: Expression,
 }
-
 
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -70,9 +73,7 @@ impl Display for Statement {
             Statement::Return(ReturnStatement { return_value }) => {
                 write!(f, "return {};", return_value)
             }
-            Statement::Expr(ExpressionStatement { expression }) => {
-                write!(f, "{}", expression)
-            }
+            Statement::Expr(ExpressionStatement { expression }) => write!(f, "{}", expression),
         }
     }
 }
@@ -80,38 +81,38 @@ impl Display for Statement {
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Identifier(s) => {
-                write!(f, "{}", s)
-            },
-            Expression::IntegerLiteral(n) => {
-                write!(f, "{}", n)
-            },
-            Expression::PrefixExpression{operator, expr} => {
-                write!(f, "({}{})", operator, expr)
-            }
+            Expression::Identifier(s) => write!(f, "{}", s),
+            Expression::IntegerLiteral(n) => write!(f, "{}", n),
+            Expression::PrefixExpression { operator, expr } => write!(f, "({}{})", operator, expr),
+            Expression::InfixExpression {
+                left,
+                operator,
+                right,
+            } => write!(f, "({} {} {})", left, operator, right),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::ast::{Program, LetStatement, Statement};
     use crate::ast::ast::Expression::Identifier;
     use crate::ast::ast::Node;
+    use crate::ast::ast::{LetStatement, Program, Statement};
 
     #[test]
     fn test_to_string() {
         let program = Program {
-            statements: vec![
-                Statement::Let(LetStatement {
-                    name: "myVar".to_owned(),
-                    value: Identifier("anotherVar".to_owned()),
-                })
-            ]
+            statements: vec![Statement::Let(LetStatement {
+                name: "myVar".to_owned(),
+                value: Identifier("anotherVar".to_owned()),
+            })],
         };
 
         let program_string = program.to_string();
 
-        assert_eq!(program_string, "let myVar = anotherVar;", "unexpected to_string output")
+        assert_eq!(
+            program_string, "let myVar = anotherVar;",
+            "unexpected to_string output"
+        )
     }
 }

@@ -1,10 +1,12 @@
+use crate::ast::ast::Expression::InfixExpression;
+use crate::ast::ast::{
+    Expression, ExpressionStatement, LetStatement, Program, ReturnStatement, Statement,
+};
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::lexer::token::Token::*;
-use crate::ast::ast::{Program, Statement, LetStatement, ReturnStatement, ExpressionStatement, Expression};
 use crate::parser::Precedence::{LOWEST, PREFIX};
 use std::fmt::format;
-
 
 type ParsingError = String;
 type ParsingErrors = Vec<ParsingError>;
@@ -49,7 +51,7 @@ impl<'a> Parser<'a> {
         while self.cur_token != Token::EOF {
             match self.parse_statement() {
                 Ok(s) => statements.push(s),
-                Err(reason) => errors.push(reason)
+                Err(reason) => errors.push(reason),
             }
             self.advance_token();
         }
@@ -61,12 +63,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-
     fn parse_statement(&mut self) -> ParsingResult<Statement> {
         match self.cur_token {
             LET => self.parse_let_statement().map(|s| Statement::Let(s)),
             RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
-            _ => self.parse_expr_statement().map(|s| Statement::Expr(s))
+            _ => self.parse_expr_statement().map(|s| Statement::Expr(s)),
         }
     }
 
@@ -92,7 +93,9 @@ impl<'a> Parser<'a> {
             self.advance_token();
         }
 
-        Ok(ReturnStatement { return_value: Expression::Identifier("not implemented yet".to_owned()) })
+        Ok(ReturnStatement {
+            return_value: Expression::Identifier("not implemented yet".to_owned()),
+        })
     }
 
     fn parse_expr_statement(&mut self) -> ParsingResult<ExpressionStatement> {
@@ -108,23 +111,41 @@ impl<'a> Parser<'a> {
     fn parse_expression(&mut self, precedence: Precedence) -> ParsingResult<Expression> {
         let prefix_fn = self.prefix_parse_fn(&self.cur_token);
 
-        match prefix_fn {
+        let mut left_expr = match prefix_fn {
             Some(func) => func(self),
-            None => Err(format!("no prefix parse function for {:?} found", self.cur_token))
+            None => Err(format!(
+                "no prefix parse function for {:?} found",
+                self.cur_token
+            )),
+        }?;
+
+        while !self.current_token_is(SEMICOLON) && precedence < precedences(&self.peek_token) {
+            match self.infix_parse_fn(&self.peek_token) {
+                Some(func) => {
+                    self.advance_token();
+                    left_expr = func(self, left_expr)?;
+                }
+                None => return Ok(left_expr),
+            }
         }
+
+        Ok(left_expr)
     }
 
     fn parse_identifier(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
         match &parser.cur_token {
             IDENT(name) => Ok(Expression::Identifier(name.clone())),
-            other => Err(format!("expected identifier but got {:?}", other))
+            other => Err(format!("expected identifier but got {:?}", other)),
         }
     }
 
     fn parse_integer_literal(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
         match &parser.cur_token {
-            INT(value) => value.parse().map_err(|_| format!("can't parse value {:?} as int", value)).map(Expression::IntegerLiteral),
-            other => Err(format!("Expected INT but got {:?}", other))
+            INT(value) => value
+                .parse()
+                .map_err(|_| format!("can't parse value {:?} as int", value))
+                .map(Expression::IntegerLiteral),
+            other => Err(format!("Expected INT but got {:?}", other)),
         }
     }
 
@@ -132,14 +153,43 @@ impl<'a> Parser<'a> {
         let token_str = match &parser.cur_token {
             BANG => Ok("!".to_owned()),
             MINUS => Ok("-".to_owned()),
-            other => Err(format!("Expected prefix token but got {:?}", other))
+            other => Err(format!("Expected prefix token but got {:?}", other)),
         };
 
         parser.advance_token();
 
-        token_str.and_then(|operator| parser
-            .parse_expression(PREFIX)
-            .map(|expr| Expression::PrefixExpression { operator, expr: Box::new(expr) }))
+        token_str.and_then(|operator| {
+            parser
+                .parse_expression(PREFIX)
+                .map(|expr| Expression::PrefixExpression {
+                    operator,
+                    expr: Box::new(expr),
+                })
+        })
+    }
+
+    fn parse_infix_expression(parser: &mut Parser, left: Expression) -> ParsingResult<Expression> {
+        let operator = match &parser.cur_token {
+            PLUS => Ok("+".to_owned()),
+            MINUS => Ok("-".to_owned()),
+            SLASH => Ok("/".to_owned()),
+            ASTERISK => Ok("*".to_owned()),
+            EQ => Ok("==".to_owned()),
+            NOT_EQ => Ok("!=".to_owned()),
+            LT => Ok("<".to_owned()),
+            GT => Ok(">".to_owned()),
+            other => Err(format!("Expected infix operator but got {:?}", other)),
+        }?;
+
+        let precedence = precedences(&parser.cur_token);
+        parser.advance_token();
+        let right = parser.parse_expression(precedence)?;
+
+        Ok(InfixExpression {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        })
     }
 
     fn current_token_is(&self, t: Token) -> bool {
@@ -153,12 +203,12 @@ impl<'a> Parser<'a> {
     fn expect_ident(&mut self) -> ParsingResult<String> {
         let result = match &self.peek_token {
             IDENT(name) => Ok(name.clone()),
-            other => Err(format!("Expected IDENT but got {:?}", other))
+            other => Err(format!("Expected IDENT but got {:?}", other)),
         };
 
         match result {
             Ok(_) => self.advance_token(),
-            _ => ()
+            _ => (),
         }
 
         result
@@ -169,7 +219,10 @@ impl<'a> Parser<'a> {
             self.advance_token();
             Ok(())
         } else {
-            Err(format!("Expected next token to be {:?} but got {:?}", t, self.peek_token))
+            Err(format!(
+                "Expected next token to be {:?} but got {:?}",
+                t, self.peek_token
+            ))
         }
     }
 
@@ -177,10 +230,33 @@ impl<'a> Parser<'a> {
         match token {
             IDENT(_) => Some(Parser::parse_identifier),
             INT(_) => Some(Parser::parse_integer_literal),
-            BANG => Some(Parser::parse_prefix_expression),
-            MINUS => Some(Parser::parse_prefix_expression),
-            _ => None
+            BANG | MINUS => Some(Parser::parse_prefix_expression),
+            _ => None,
         }
+    }
+
+    fn infix_parse_fn(&self, token: &Token) -> Option<InfixParseFn> {
+        match token {
+            PLUS | MINUS | SLASH | ASTERISK | EQ | NOT_EQ | LT | GT => {
+                Some(Parser::parse_infix_expression)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn precedences(token: &Token) -> Precedence {
+    use crate::parser::Precedence::*;
+    match token {
+        EQ => EQUALS,
+        NOT_EQ => EQUALS,
+        LT => LESSGREATER,
+        GT => LESSGREATER,
+        PLUS => SUM,
+        MINUS => SUM,
+        SLASH => PRODUCT,
+        ASTERISK => PRODUCT,
+        _ => LOWEST,
     }
 }
 
@@ -189,10 +265,10 @@ type InfixParseFn = fn(parser: &mut Parser<'_>, left: Expression) -> ParsingResu
 
 #[cfg(test)]
 mod tests {
+    use crate::ast::ast::Expression::*;
+    use crate::ast::ast::{Expression, ExpressionStatement, ReturnStatement, Statement};
     use crate::lexer::lexer::Lexer;
     use crate::parser::Parser;
-    use crate::ast::ast::{Statement, ReturnStatement, ExpressionStatement, Expression};
-    use crate::ast::ast::Expression::*;
 
     #[test]
     fn test_let_statements() {
@@ -208,7 +284,12 @@ mod tests {
         let program = parser.parse_program().expect("program should be parsable");
         let statements = program.statements;
 
-        assert_eq!(statements.len(), 3, "program.Statements does not contain 3 statements. got {}", statements.len());
+        assert_eq!(
+            statements.len(),
+            3,
+            "program.Statements does not contain 3 statements. got {}",
+            statements.len()
+        );
 
         let tests = vec!["x", "y", "foobar"];
 
@@ -219,10 +300,8 @@ mod tests {
 
     fn test_let_statement(statement: &Statement, name: &str) {
         match statement {
-            Statement::Let(s) => {
-                assert_eq!(s.name, name)
-            }
-            other => panic!("Expected Let but got {:?}", other)
+            Statement::Let(s) => assert_eq!(s.name, name),
+            other => panic!("Expected Let but got {:?}", other),
         }
     }
 
@@ -239,18 +318,19 @@ mod tests {
         let program = parser.parse_program().expect("program should be parsable");
         let statements = program.statements;
 
-        assert_eq!(statements.len(), 3, "program.Statements does not contain 3 statements. got {}", statements.len());
+        assert_eq!(
+            statements.len(),
+            3,
+            "program.Statements does not contain 3 statements. got {}",
+            statements.len()
+        );
 
         let tests = vec!["5", "10", "42"];
 
         for (id, &test_str) in tests.iter().enumerate() {
             match &statements[id] {
-                Statement::Return(ReturnStatement { return_value }) => {
-                    ()
-                }
-                other => {
-                    panic!("Expected Return but got {:?}", other)
-                }
+                Statement::Return(ReturnStatement { return_value }) => (),
+                other => panic!("Expected Return but got {:?}", other),
             }
         }
     }
@@ -265,7 +345,11 @@ mod tests {
         let program = parser.parse_program().expect("program should be parsable");
         let statements = program.statements;
 
-        assert_eq!(statements.len(), 1, "program.Statements does not contain 1 statement.");
+        assert_eq!(
+            statements.len(),
+            1,
+            "program.Statements does not contain 1 statement."
+        );
 
         let statement = &statements[0];
 
@@ -273,7 +357,7 @@ mod tests {
             Statement::Expr(ExpressionStatement { expression }) => {
                 assert_eq!(expression, &Identifier("foobar".to_owned()))
             }
-            other => panic!("expected an identifier but got {:?}", other)
+            other => panic!("expected an identifier but got {:?}", other),
         }
     }
 
@@ -287,7 +371,11 @@ mod tests {
         let program = parser.parse_program().expect("program should be parsable");
         let statements = program.statements;
 
-        assert_eq!(statements.len(), 1, "program.Statements does not contain 1 statement.");
+        assert_eq!(
+            statements.len(),
+            1,
+            "program.Statements does not contain 1 statement."
+        );
 
         let statement = &statements[0];
 
@@ -295,7 +383,7 @@ mod tests {
             Statement::Expr(ExpressionStatement { expression }) => {
                 assert_eq!(expression, &IntegerLiteral(5))
             }
-            other => panic!("expected an integer literal but got {:?}", other)
+            other => panic!("expected an integer literal but got {:?}", other),
         }
     }
 
@@ -305,39 +393,143 @@ mod tests {
         type Operator = String;
         type IntValue = i64;
 
-        struct PrefixTests(Input, Operator, IntValue);
+        struct PrefixTest(Input, Operator, IntValue);
 
         let prefix_tests = vec![
-            PrefixTests("!5;".to_owned(), "!".to_owned(), 5),
-            PrefixTests("-15;".to_owned(), "-".to_owned(), 15)
+            PrefixTest("!5;".to_owned(), "!".to_owned(), 5),
+            PrefixTest("-15;".to_owned(), "-".to_owned(), 15),
         ];
 
-        for test in prefix_tests {
-            let lexer = Lexer::new(&test.0);
-            let program = Parser::new(lexer).parse_program().expect("program should be parsable");
+        for PrefixTest(input, op, intval) in prefix_tests {
+            let lexer = Lexer::new(&input);
+            let program = Parser::new(lexer)
+                .parse_program()
+                .expect("program should be parsable");
             let statements = program.statements;
 
-            assert_eq!(statements.len(), 1, "program.Statements should contain 1 statement.");
+            assert_eq!(
+                statements.len(),
+                1,
+                "program.Statements should contain 1 statement."
+            );
 
             match &statements[0] {
                 Statement::Expr(ExpressionStatement { expression }) => match expression {
                     Expression::PrefixExpression { operator, expr } => {
-                        assert_eq!(*operator, test.1);
-                        test_integer_literal(expr, test.2)
+                        assert_eq!(*operator, op);
+                        test_integer_literal(expr, intval)
                     }
-                    other => panic!("expected PrefixExpression but got {:?}", other)
+                    other => panic!("expected PrefixExpression but got {:?}", other),
                 },
-                other => panic!("expected Expr but got {:?}", other)
+                other => panic!("expected Expr but got {:?}", other),
             }
         }
     }
 
     fn test_integer_literal(expr: &Expression, value: i64) {
         match expr {
-            Expression::IntegerLiteral(int) => {
-                assert_eq!(*int, value)
+            Expression::IntegerLiteral(int) => assert_eq!(*int, value),
+            other => panic!("expected integer literal but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parsing_infix_expr() {
+        type Input = String;
+        type Operator = String;
+        type LeftValue = i64;
+        type RightValue = i64;
+
+        struct InfixTest(Input, LeftValue, Operator, RightValue);
+
+        let infix_tests = vec![
+            InfixTest("5 + 5;".to_owned(), 5, "+".to_owned(), 5),
+            InfixTest("5 - 5;".to_owned(), 5, "-".to_owned(), 5),
+            InfixTest("5 * 5;".to_owned(), 5, "*".to_owned(), 5),
+            InfixTest("5 / 5;".to_owned(), 5, "/".to_owned(), 5),
+            InfixTest("5 > 5;".to_owned(), 5, ">".to_owned(), 5),
+            InfixTest("5 < 5;".to_owned(), 5, "<".to_owned(), 5),
+            InfixTest("5 == 5;".to_owned(), 5, "==".to_owned(), 5),
+            InfixTest("5 != 5;".to_owned(), 5, "!=".to_owned(), 5),
+        ];
+
+        for InfixTest(input, left_val, op, right_val) in infix_tests {
+            let lexer = Lexer::new(&input);
+            let program = Parser::new(lexer)
+                .parse_program()
+                .expect("program should be parsable");
+            let statements = program.statements;
+
+            assert_eq!(
+                statements.len(),
+                1,
+                "program.Statements should contain 1 statement."
+            );
+
+            match &statements[0] {
+                Statement::Expr(ExpressionStatement { expression }) => match expression {
+                    Expression::InfixExpression {
+                        left,
+                        operator,
+                        right,
+                    } => {
+                        assert_eq!(*operator, op);
+                        test_integer_literal(left, left_val);
+                        test_integer_literal(right, right_val);
+                    }
+                    other => panic!("expected PrefixExpression but got {:?}", other),
+                },
+                other => panic!("expected Expr but got {:?}", other),
             }
-            other => panic!("expected integer literal but got {:?}", other)
+        }
+    }
+
+    #[test]
+    fn test_operator_precedence_parsing() {
+        type Input = String;
+        type Expected = String;
+        struct Test(Input, Expected);
+
+        let tests = vec![
+            Test("-a * b".to_owned(), "((-a) * b)".to_owned()),
+            Test("!-a".to_owned(), "(!(-a))".to_owned()),
+            Test("a + b + c".to_owned(), "((a + b) + c)".to_owned()),
+            Test("a + b - c".to_owned(), "((a + b) - c)".to_owned()),
+            Test("a * b * c".to_owned(), "((a * b) * c)".to_owned()),
+            Test("a * b / c".to_owned(), "((a * b) / c)".to_owned()),
+            Test("a + b / c".to_owned(), "(a + (b / c))".to_owned()),
+            Test(
+                "a + b * c + d / e - f".to_owned(),
+                "(((a + (b * c)) + (d / e)) - f)".to_owned(),
+            ),
+            Test("3 + 4; -5 * 5".to_owned(), "(3 + 4)((-5) * 5)".to_owned()),
+            Test(
+                "5 > 4 == 3 < 4".to_owned(),
+                "((5 > 4) == (3 < 4))".to_owned(),
+            ),
+            Test(
+                "5 < 4 != 3 > 4".to_owned(),
+                "((5 < 4) != (3 > 4))".to_owned(),
+            ),
+            Test(
+                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_owned(),
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_owned(),
+            ),
+            Test(
+                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_owned(),
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_owned(),
+            ),
+        ];
+
+        for Test(input, expected) in tests {
+            let lexer = Lexer::new(&input);
+            let program = Parser::new(lexer)
+                .parse_program()
+                .expect("program should be parsable");
+
+            let actual = program.to_string();
+
+            assert_eq!(actual, expected);
         }
     }
 }

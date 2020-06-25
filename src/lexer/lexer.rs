@@ -1,16 +1,16 @@
-use crate::lexer::token::{Token, lookup_ident};
+use crate::lexer::token::Token::*;
+use crate::lexer::token::{lookup_ident, Token};
 use std::iter::Peekable;
 use std::str::Chars;
-use crate::lexer::token::Token::*;
 
 pub struct Lexer<'a> {
-    peekable: Peekable<Chars<'a>>
+    peekable: Peekable<Chars<'a>>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Lexer<'a> {
         Lexer {
-            peekable: input.chars().peekable()
+            peekable: input.chars().peekable(),
         }
     }
 
@@ -20,54 +20,44 @@ impl<'a> Lexer<'a> {
         let peekable = &mut self.peekable;
 
         match peekable.next() {
-            Some(char) => {
-                match char {
-                    ';' => SEMICOLON,
-                    '(' => LPAREN,
-                    ')' => RPAREN,
-                    ',' => COMMA,
-                    '+' => PLUS,
-                    '{' => LBRACE,
-                    '}' => RBRACE,
-                    '=' => {
-                        match peekable.peek() {
-                            Some('=') => {
-                                peekable.next();
-                                EQ
-                            }
-                            _ => {
-                                ASSIGN
-                            }
-                        }
+            Some(char) => match char {
+                ';' => SEMICOLON,
+                '(' => LPAREN,
+                ')' => RPAREN,
+                ',' => COMMA,
+                '+' => PLUS,
+                '{' => LBRACE,
+                '}' => RBRACE,
+                '=' => match peekable.peek() {
+                    Some('=') => {
+                        peekable.next();
+                        EQ
                     }
-                    '-' => MINUS,
-                    '!' => {
-                        match peekable.peek() {
-                            Some('=') => {
-                                peekable.next();
-                                NOT_EQ
-                            }
-                            _ => {
-                                BANG
-                            }
-                        }
+                    _ => ASSIGN,
+                },
+                '-' => MINUS,
+                '!' => match peekable.peek() {
+                    Some('=') => {
+                        peekable.next();
+                        NOT_EQ
                     }
-                    '/' => SLASH,
-                    '*' => ASTERISK,
-                    '<' => LT,
-                    '>' => GT,
-                    c if c.is_alphabetic() || char == '_' => {
-                        let literal = self.read_identifier(c);
-                        lookup_ident(literal)
-                    }
-                    d if d.is_ascii_digit() => {
-                        let literal = self.read_number(d);
-                        INT(literal)
-                    }
-                    _ => ILLEGAL
+                    _ => BANG,
+                },
+                '/' => SLASH,
+                '*' => ASTERISK,
+                '<' => LT,
+                '>' => GT,
+                c if c.is_alphabetic() || char == '_' => {
+                    let literal = self.read_identifier(c);
+                    lookup_ident(literal)
                 }
-            }
-            None => EOF
+                d if d.is_ascii_digit() => {
+                    let literal = self.read_number(d);
+                    INT(literal)
+                }
+                _ => ILLEGAL,
+            },
+            None => EOF,
         }
     }
 
@@ -116,7 +106,7 @@ impl<'a> Iterator for Lexer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.next_token() {
             EOF => None,
-            other => Some(other)
+            other => Some(other),
         }
     }
 }
@@ -124,9 +114,9 @@ impl<'a> Iterator for Lexer<'a> {
 #[cfg(test)]
 mod tests {
 
+    use crate::lexer::lexer::Lexer;
     use crate::lexer::token::Token;
     use crate::lexer::token::Token::*;
-    use crate::lexer::lexer::Lexer;
 
     #[test]
     fn test_next_token() {
@@ -228,11 +218,10 @@ mod tests {
             TestInput(NOT_EQ),
             TestInput(INT("9".to_owned())),
             TestInput(SEMICOLON),
-            TestInput(EOF)
+            TestInput(EOF),
         ];
 
         let mut lexer = Lexer::new(input);
-
 
         for test in tests.iter() {
             let token = lexer.next_token();
