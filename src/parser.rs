@@ -282,6 +282,7 @@ mod tests {
     use crate::ast::ast::Expression::*;
     use crate::ast::ast::{Expression, ExpressionStatement, ReturnStatement, Statement};
     use crate::lexer::lexer::Lexer;
+    use crate::lexer::token::Token::TRUE;
     use crate::parser::Parser;
 
     #[test]
@@ -405,13 +406,17 @@ mod tests {
     fn test_parsing_prefix_expr() {
         type Input = String;
         type Operator = String;
-        type IntValue = i64;
+        type Value = ExpectedExprValue;
 
-        struct PrefixTest(Input, Operator, IntValue);
+        struct PrefixTest(Input, Operator, Value);
+
+        use ExpectedExprValue::*;
 
         let prefix_tests = vec![
-            PrefixTest("!5;".to_owned(), "!".to_owned(), 5),
-            PrefixTest("-15;".to_owned(), "-".to_owned(), 15),
+            PrefixTest("!5;".to_owned(), "!".to_owned(), Int(5)),
+            PrefixTest("-15;".to_owned(), "-".to_owned(), Int(15)),
+            PrefixTest("!true;".to_owned(), "!".to_owned(), Bool(true)),
+            PrefixTest("!false;".to_owned(), "!".to_owned(), Bool(false)),
         ];
 
         for PrefixTest(input, op, intval) in prefix_tests {
@@ -431,7 +436,7 @@ mod tests {
                 Statement::Expr(ExpressionStatement { expression }) => match expression {
                     Expression::PrefixExpression { operator, expr } => {
                         assert_eq!(*operator, op);
-                        test_literal_expression(expr, ExpectedExprValue::Int(intval))
+                        test_literal_expression(expr, intval)
                     }
                     other => panic!("expected PrefixExpression but got {:?}", other),
                 },
@@ -450,30 +455,48 @@ mod tests {
     fn test_identifier(expression: &Expression, value: String) {
         match expression {
             Expression::Identifier(s) => assert_eq!(*s, value),
-            other => panic!("expected Identifier but got {:?}", other)
+            other => panic!("expected Identifier but got {:?}", other),
+        }
+    }
+
+    fn test_boolean_literal(expr: &Expression, value: bool) {
+        match expr {
+            Expression::Boolean(b) => assert_eq!(*b, value),
+            other => panic!("expected Boolean but got {:?}", other),
         }
     }
 
     enum ExpectedExprValue {
         Int(i64),
-        String(String),
+        Str(String),
+        Bool(bool),
     }
 
     fn test_literal_expression(expression: &Expression, value: ExpectedExprValue) {
         match value {
             ExpectedExprValue::Int(int) => test_integer_literal(expression, int),
-            ExpectedExprValue::String(string) => test_identifier(expression, string)
+            ExpectedExprValue::Str(string) => test_identifier(expression, string),
+            ExpectedExprValue::Bool(b) => test_boolean_literal(expression, b),
         }
     }
 
-    fn test_infix_expression(expr: &Expression, l: ExpectedExprValue, op: String, r: ExpectedExprValue) {
+    fn test_infix_expression(
+        expr: &Expression,
+        l: ExpectedExprValue,
+        op: String,
+        r: ExpectedExprValue,
+    ) {
         match expr {
-            InfixExpression { left, operator, right } => {
+            InfixExpression {
+                left,
+                operator,
+                right,
+            } => {
                 test_literal_expression(left, l);
                 assert_eq!(op, *operator);
                 test_literal_expression(right, r);
             }
-            other => panic!("InfixExpression Identifier but got {:?}", other)
+            other => panic!("InfixExpression Identifier but got {:?}", other),
         }
     }
 
@@ -481,20 +504,40 @@ mod tests {
     fn test_parsing_infix_expr() {
         type Input = String;
         type Operator = String;
-        type LeftValue = i64;
-        type RightValue = i64;
+        type LeftValue = ExpectedExprValue;
+        type RightValue = ExpectedExprValue;
+
+        use ExpectedExprValue::*;
 
         struct InfixTest(Input, LeftValue, Operator, RightValue);
 
         let infix_tests = vec![
-            InfixTest("5 + 5;".to_owned(), 5, "+".to_owned(), 5),
-            InfixTest("5 - 5;".to_owned(), 5, "-".to_owned(), 5),
-            InfixTest("5 * 5;".to_owned(), 5, "*".to_owned(), 5),
-            InfixTest("5 / 5;".to_owned(), 5, "/".to_owned(), 5),
-            InfixTest("5 > 5;".to_owned(), 5, ">".to_owned(), 5),
-            InfixTest("5 < 5;".to_owned(), 5, "<".to_owned(), 5),
-            InfixTest("5 == 5;".to_owned(), 5, "==".to_owned(), 5),
-            InfixTest("5 != 5;".to_owned(), 5, "!=".to_owned(), 5),
+            InfixTest("5 + 5;".to_owned(), Int(5), "+".to_owned(), Int(5)),
+            InfixTest("5 - 5;".to_owned(), Int(5), "-".to_owned(), Int(5)),
+            InfixTest("5 * 5;".to_owned(), Int(5), "*".to_owned(), Int(5)),
+            InfixTest("5 / 5;".to_owned(), Int(5), "/".to_owned(), Int(5)),
+            InfixTest("5 > 5;".to_owned(), Int(5), ">".to_owned(), Int(5)),
+            InfixTest("5 < 5;".to_owned(), Int(5), "<".to_owned(), Int(5)),
+            InfixTest("5 == 5;".to_owned(), Int(5), "==".to_owned(), Int(5)),
+            InfixTest("5 != 5;".to_owned(), Int(5), "!=".to_owned(), Int(5)),
+            InfixTest(
+                "true == true".to_owned(),
+                Bool(true),
+                "==".to_owned(),
+                Bool(true),
+            ),
+            InfixTest(
+                "true != false".to_owned(),
+                Bool(true),
+                "!=".to_owned(),
+                Bool(false),
+            ),
+            InfixTest(
+                "false == false".to_owned(),
+                Bool(false),
+                "==".to_owned(),
+                Bool(false),
+            ),
         ];
 
         for InfixTest(input, left_val, op, right_val) in infix_tests {
@@ -512,7 +555,7 @@ mod tests {
 
             match &statements[0] {
                 Statement::Expr(ExpressionStatement { expression }) => {
-                    test_infix_expression(expression, ExpectedExprValue::Int(left_val), op, ExpectedExprValue::Int(right_val));
+                    test_infix_expression(expression, left_val, op, right_val);
                 }
                 other => panic!("expected Expr but got {:?}", other),
             }
@@ -554,6 +597,10 @@ mod tests {
                 "3 + 4 * 5 == 3 * 1 + 4 * 5".to_owned(),
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_owned(),
             ),
+            Test("true".to_owned(), "true".to_owned()),
+            Test("false".to_owned(), "false".to_owned()),
+            Test("3 > 5 == false".to_owned(), "((3 > 5) == false)".to_owned()),
+            Test("3 < 5 == true".to_owned(), "((3 < 5) == true)".to_owned()),
         ];
 
         for Test(input, expected) in tests {
@@ -576,7 +623,7 @@ mod tests {
 
         let tests = vec![
             Test("true;".to_owned(), true),
-            Test("false;".to_owned(), false)
+            Test("false;".to_owned(), false),
         ];
 
         for Test(input, expected) in tests {
@@ -597,8 +644,7 @@ mod tests {
                 Statement::Expr(ExpressionStatement { expression }) => match expression {
                     Boolean(boolean) => assert_eq!(*boolean, expected),
                     other => panic!("expected Boolean but got {:?}", other),
-
-                }
+                },
                 other => panic!("expected ExpressionStatement but got {:?}", other),
             }
         }
