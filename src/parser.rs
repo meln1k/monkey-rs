@@ -157,6 +157,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_grouped_expression(parser: &mut Parser) -> ParsingResult<Expression> {
+        parser.advance_token();
+
+        let expr = parser.parse_expression(LOWEST)?;
+
+        parser.expect_peek(Token::RPAREN)?;
+
+        Ok(expr)
+    }
+
     fn parse_prefix_expression(parser: &mut Parser) -> ParsingResult<Expression> {
         let token_str = match &parser.cur_token {
             Token::BANG => Ok("!".to_owned()),
@@ -240,9 +250,12 @@ impl<'a> Parser<'a> {
             Token::INT(_) => Some(Parser::parse_integer_literal),
             Token::BANG | Token::MINUS => Some(Parser::parse_prefix_expression),
             Token::TRUE | Token::FALSE => Some(Parser::parse_boolean),
+            Token::LPAREN => Some(Parser::parse_grouped_expression),
             _ => None,
         }
     }
+
+
 
     fn infix_parse_fn(&self, token: &Token) -> Option<InfixParseFn> {
         match token {
@@ -601,6 +614,14 @@ mod tests {
             Test("false".to_owned(), "false".to_owned()),
             Test("3 > 5 == false".to_owned(), "((3 > 5) == false)".to_owned()),
             Test("3 < 5 == true".to_owned(), "((3 < 5) == true)".to_owned()),
+            Test(
+                "1 + (2 + 3) + 4".to_owned(),
+                "((1 + (2 + 3)) + 4)".to_owned(),
+            ),
+            Test("(5 + 5) * 2".to_owned(), "((5 + 5) * 2)".to_owned()),
+            Test("2 / (5 + 5)".to_owned(), "(2 / (5 + 5))".to_owned()),
+            Test("-(5 + 5)".to_owned(), "(-(5 + 5))".to_owned()),
+            Test("!(true == true)".to_owned(), "(!(true == true))".to_owned()),
         ];
 
         for Test(input, expected) in tests {
