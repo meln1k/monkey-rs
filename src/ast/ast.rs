@@ -29,6 +29,7 @@ pub enum Expression {
         operator: String,
         right: Box<Expression>,
     },
+    Boolean(bool)
 }
 
 #[derive(Debug)]
@@ -89,6 +90,7 @@ impl Display for Expression {
                 operator,
                 right,
             } => write!(f, "({} {} {})", left, operator, right),
+            Expression::Boolean(b) => write!(f, "{}", b)
         }
     }
 }

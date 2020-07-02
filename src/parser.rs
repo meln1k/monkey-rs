@@ -139,6 +139,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_boolean(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
+        match &parser.cur_token {
+            Token::TRUE => Ok(Expression::Boolean(true)),
+            Token::FALSE => Ok(Expression::Boolean(false)),
+            other => Err(format!("expected boolean but got {:?}", other)),
+        }
+    }
+
     fn parse_integer_literal(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
         match &parser.cur_token {
             Token::INT(value) => value
@@ -231,6 +239,7 @@ impl<'a> Parser<'a> {
             Token::IDENT(_) => Some(Parser::parse_identifier),
             Token::INT(_) => Some(Parser::parse_integer_literal),
             Token::BANG | Token::MINUS => Some(Parser::parse_prefix_expression),
+            Token::TRUE | Token::FALSE => Some(Parser::parse_boolean),
             _ => None,
         }
     }
@@ -422,7 +431,7 @@ mod tests {
                 Statement::Expr(ExpressionStatement { expression }) => match expression {
                     Expression::PrefixExpression { operator, expr } => {
                         assert_eq!(*operator, op);
-                        test_integer_literal(expr, intval)
+                        test_literal_expression(expr, ExpectedExprValue::Int(intval))
                     }
                     other => panic!("expected PrefixExpression but got {:?}", other),
                 },
@@ -435,6 +444,36 @@ mod tests {
         match expr {
             Expression::IntegerLiteral(int) => assert_eq!(*int, value),
             other => panic!("expected integer literal but got {:?}", other),
+        }
+    }
+
+    fn test_identifier(expression: &Expression, value: String) {
+        match expression {
+            Expression::Identifier(s) => assert_eq!(*s, value),
+            other => panic!("expected Identifier but got {:?}", other)
+        }
+    }
+
+    enum ExpectedExprValue {
+        Int(i64),
+        String(String),
+    }
+
+    fn test_literal_expression(expression: &Expression, value: ExpectedExprValue) {
+        match value {
+            ExpectedExprValue::Int(int) => test_integer_literal(expression, int),
+            ExpectedExprValue::String(string) => test_identifier(expression, string)
+        }
+    }
+
+    fn test_infix_expression(expr: &Expression, l: ExpectedExprValue, op: String, r: ExpectedExprValue) {
+        match expr {
+            InfixExpression { left, operator, right } => {
+                test_literal_expression(left, l);
+                assert_eq!(op, *operator);
+                test_literal_expression(right, r);
+            }
+            other => panic!("InfixExpression Identifier but got {:?}", other)
         }
     }
 
@@ -472,18 +511,9 @@ mod tests {
             );
 
             match &statements[0] {
-                Statement::Expr(ExpressionStatement { expression }) => match expression {
-                    Expression::InfixExpression {
-                        left,
-                        operator,
-                        right,
-                    } => {
-                        assert_eq!(*operator, op);
-                        test_integer_literal(left, left_val);
-                        test_integer_literal(right, right_val);
-                    }
-                    other => panic!("expected PrefixExpression but got {:?}", other),
-                },
+                Statement::Expr(ExpressionStatement { expression }) => {
+                    test_infix_expression(expression, ExpectedExprValue::Int(left_val), op, ExpectedExprValue::Int(right_val));
+                }
                 other => panic!("expected Expr but got {:?}", other),
             }
         }
@@ -535,6 +565,42 @@ mod tests {
             let actual = program.to_string();
 
             assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn test_boolean_expression() {
+        type Input = String;
+        type Expected = bool;
+        struct Test(Input, Expected);
+
+        let tests = vec![
+            Test("true;".to_owned(), true),
+            Test("false;".to_owned(), false)
+        ];
+
+        for Test(input, expected) in tests {
+            let lexer = Lexer::new(&input);
+            let program = Parser::new(lexer)
+                .parse_program()
+                .expect("program should be parsable");
+
+            let statements = program.statements;
+
+            assert_eq!(
+                statements.len(),
+                1,
+                "program.Statements should contain 1 statement."
+            );
+
+            match &statements[0] {
+                Statement::Expr(ExpressionStatement { expression }) => match expression {
+                    Boolean(boolean) => assert_eq!(*boolean, expected),
+                    other => panic!("expected Boolean but got {:?}", other),
+
+                }
+                other => panic!("expected ExpressionStatement but got {:?}", other),
+            }
         }
     }
 }
