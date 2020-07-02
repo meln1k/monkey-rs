@@ -4,7 +4,6 @@ use crate::ast::ast::{
 };
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
-use crate::lexer::token::Token::*;
 use crate::parser::Precedence::{LOWEST, PREFIX};
 use std::fmt::format;
 
@@ -65,18 +64,18 @@ impl<'a> Parser<'a> {
 
     fn parse_statement(&mut self) -> ParsingResult<Statement> {
         match self.cur_token {
-            LET => self.parse_let_statement().map(|s| Statement::Let(s)),
-            RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
+            Token::LET => self.parse_let_statement().map(|s| Statement::Let(s)),
+            Token::RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
             _ => self.parse_expr_statement().map(|s| Statement::Expr(s)),
         }
     }
 
     fn parse_let_statement(&mut self) -> ParsingResult<LetStatement> {
         let ident_name = self.expect_ident()?;
-        self.expect_peek(ASSIGN)?;
+        self.expect_peek(Token::ASSIGN)?;
 
         // todo: do not just skip
-        while !self.current_token_is(SEMICOLON) {
+        while !self.current_token_is(Token::SEMICOLON) {
             self.advance_token();
         }
 
@@ -89,7 +88,7 @@ impl<'a> Parser<'a> {
     fn parse_return_statement(&mut self) -> ParsingResult<ReturnStatement> {
         self.advance_token();
 
-        while !self.current_token_is(SEMICOLON) {
+        while !self.current_token_is(Token::SEMICOLON) {
             self.advance_token();
         }
 
@@ -101,7 +100,7 @@ impl<'a> Parser<'a> {
     fn parse_expr_statement(&mut self) -> ParsingResult<ExpressionStatement> {
         let maybe_expr = self.parse_expression(LOWEST);
 
-        if self.peek_token_is(&SEMICOLON) {
+        if self.peek_token_is(&Token::SEMICOLON) {
             self.advance_token()
         }
 
@@ -119,7 +118,8 @@ impl<'a> Parser<'a> {
             )),
         }?;
 
-        while !self.current_token_is(SEMICOLON) && precedence < precedences(&self.peek_token) {
+        while !self.current_token_is(Token::SEMICOLON) && precedence < precedences(&self.peek_token)
+        {
             match self.infix_parse_fn(&self.peek_token) {
                 Some(func) => {
                     self.advance_token();
@@ -134,14 +134,14 @@ impl<'a> Parser<'a> {
 
     fn parse_identifier(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
         match &parser.cur_token {
-            IDENT(name) => Ok(Expression::Identifier(name.clone())),
+            Token::IDENT(name) => Ok(Expression::Identifier(name.clone())),
             other => Err(format!("expected identifier but got {:?}", other)),
         }
     }
 
     fn parse_integer_literal(parser: &mut Parser<'_>) -> ParsingResult<Expression> {
         match &parser.cur_token {
-            INT(value) => value
+            Token::INT(value) => value
                 .parse()
                 .map_err(|_| format!("can't parse value {:?} as int", value))
                 .map(Expression::IntegerLiteral),
@@ -151,8 +151,8 @@ impl<'a> Parser<'a> {
 
     fn parse_prefix_expression(parser: &mut Parser) -> ParsingResult<Expression> {
         let token_str = match &parser.cur_token {
-            BANG => Ok("!".to_owned()),
-            MINUS => Ok("-".to_owned()),
+            Token::BANG => Ok("!".to_owned()),
+            Token::MINUS => Ok("-".to_owned()),
             other => Err(format!("Expected prefix token but got {:?}", other)),
         };
 
@@ -170,14 +170,14 @@ impl<'a> Parser<'a> {
 
     fn parse_infix_expression(parser: &mut Parser, left: Expression) -> ParsingResult<Expression> {
         let operator = match &parser.cur_token {
-            PLUS => Ok("+".to_owned()),
-            MINUS => Ok("-".to_owned()),
-            SLASH => Ok("/".to_owned()),
-            ASTERISK => Ok("*".to_owned()),
-            EQ => Ok("==".to_owned()),
-            NOT_EQ => Ok("!=".to_owned()),
-            LT => Ok("<".to_owned()),
-            GT => Ok(">".to_owned()),
+            Token::PLUS => Ok("+".to_owned()),
+            Token::MINUS => Ok("-".to_owned()),
+            Token::SLASH => Ok("/".to_owned()),
+            Token::ASTERISK => Ok("*".to_owned()),
+            Token::EQ => Ok("==".to_owned()),
+            Token::NOT_EQ => Ok("!=".to_owned()),
+            Token::LT => Ok("<".to_owned()),
+            Token::GT => Ok(">".to_owned()),
             other => Err(format!("Expected infix operator but got {:?}", other)),
         }?;
 
@@ -202,7 +202,7 @@ impl<'a> Parser<'a> {
 
     fn expect_ident(&mut self) -> ParsingResult<String> {
         let result = match &self.peek_token {
-            IDENT(name) => Ok(name.clone()),
+            Token::IDENT(name) => Ok(name.clone()),
             other => Err(format!("Expected IDENT but got {:?}", other)),
         };
 
@@ -228,18 +228,23 @@ impl<'a> Parser<'a> {
 
     fn prefix_parse_fn(&self, token: &Token) -> Option<PrefixParseFn> {
         match token {
-            IDENT(_) => Some(Parser::parse_identifier),
-            INT(_) => Some(Parser::parse_integer_literal),
-            BANG | MINUS => Some(Parser::parse_prefix_expression),
+            Token::IDENT(_) => Some(Parser::parse_identifier),
+            Token::INT(_) => Some(Parser::parse_integer_literal),
+            Token::BANG | Token::MINUS => Some(Parser::parse_prefix_expression),
             _ => None,
         }
     }
 
     fn infix_parse_fn(&self, token: &Token) -> Option<InfixParseFn> {
         match token {
-            PLUS | MINUS | SLASH | ASTERISK | EQ | NOT_EQ | LT | GT => {
-                Some(Parser::parse_infix_expression)
-            }
+            Token::PLUS
+            | Token::MINUS
+            | Token::SLASH
+            | Token::ASTERISK
+            | Token::EQ
+            | Token::NOT_EQ
+            | Token::LT
+            | Token::GT => Some(Parser::parse_infix_expression),
             _ => None,
         }
     }
@@ -248,14 +253,14 @@ impl<'a> Parser<'a> {
 fn precedences(token: &Token) -> Precedence {
     use crate::parser::Precedence::*;
     match token {
-        EQ => EQUALS,
-        NOT_EQ => EQUALS,
-        LT => LESSGREATER,
-        GT => LESSGREATER,
-        PLUS => SUM,
-        MINUS => SUM,
-        SLASH => PRODUCT,
-        ASTERISK => PRODUCT,
+        Token::EQ => EQUALS,
+        Token::NOT_EQ => EQUALS,
+        Token::LT => LESSGREATER,
+        Token::GT => LESSGREATER,
+        Token::PLUS => SUM,
+        Token::MINUS => SUM,
+        Token::SLASH => PRODUCT,
+        Token::ASTERISK => PRODUCT,
         _ => LOWEST,
     }
 }
