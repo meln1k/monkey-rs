@@ -1,11 +1,11 @@
-use crate::ast::ast::Expression::InfixExpression;
+use crate::ast::ast::Expression::{IfExpression, InfixExpression};
 use crate::ast::ast::{
-    Expression, ExpressionStatement, LetStatement, Program, ReturnStatement, Statement,
+    BlockStatement, Expression, ExpressionStatement, LetStatement, Program, ReturnStatement,
+    Statement,
 };
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::parser::Precedence::{LOWEST, PREFIX};
-use std::fmt::format;
 
 type ParsingError = String;
 type ParsingErrors = Vec<ParsingError>;
@@ -186,6 +186,41 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_if_expression(parser: &mut Parser) -> ParsingResult<Expression> {
+        parser.expect_peek(Token::LPAREN)?;
+        parser.advance_token();
+        let condition = Box::new(parser.parse_expression(LOWEST)?);
+        parser.expect_peek(Token::RPAREN)?;
+        parser.expect_peek(Token::LBRACE)?;
+        let consequence = Box::new(parser.parse_block_statement()?);
+
+        let alternative = if parser.peek_token_is(&Token::ELSE) {
+            parser.advance_token();
+            parser.expect_peek(Token::LBRACE)?;
+            Some(Box::new(parser.parse_block_statement()?))
+        } else {
+            None
+        };
+
+        Ok(IfExpression {
+            condition,
+            consequence,
+            alternative,
+        })
+    }
+
+    fn parse_block_statement(&mut self) -> ParsingResult<BlockStatement> {
+        self.advance_token();
+        let mut statements: Vec<Statement> = Vec::new();
+
+        while !self.current_token_is(Token::RBRACE) && !self.current_token_is(Token::EOF) {
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+            self.advance_token();
+        }
+        Ok(BlockStatement { statements })
+    }
+
     fn parse_infix_expression(parser: &mut Parser, left: Expression) -> ParsingResult<Expression> {
         let operator = match &parser.cur_token {
             Token::PLUS => Ok("+".to_owned()),
@@ -234,8 +269,7 @@ impl<'a> Parser<'a> {
 
     fn expect_peek(&mut self, t: Token) -> ParsingResult<()> {
         if self.peek_token_is(&t) {
-            self.advance_token();
-            Ok(())
+            Ok(self.advance_token())
         } else {
             Err(format!(
                 "Expected next token to be {:?} but got {:?}",
@@ -251,11 +285,10 @@ impl<'a> Parser<'a> {
             Token::BANG | Token::MINUS => Some(Parser::parse_prefix_expression),
             Token::TRUE | Token::FALSE => Some(Parser::parse_boolean),
             Token::LPAREN => Some(Parser::parse_grouped_expression),
+            Token::IF => Some(Parser::parse_if_expression),
             _ => None,
         }
     }
-
-
 
     fn infix_parse_fn(&self, token: &Token) -> Option<InfixParseFn> {
         match token {
@@ -295,7 +328,7 @@ mod tests {
     use crate::ast::ast::Expression::*;
     use crate::ast::ast::{Expression, ExpressionStatement, ReturnStatement, Statement};
     use crate::lexer::lexer::Lexer;
-    use crate::lexer::token::Token::TRUE;
+    use crate::parser::tests::ExpectedExprValue::Str;
     use crate::parser::Parser;
 
     #[test]
@@ -668,6 +701,108 @@ mod tests {
                 },
                 other => panic!("expected ExpressionStatement but got {:?}", other),
             }
+        }
+    }
+
+    #[test]
+    fn test_if_expression() {
+        let input = "if (x < y) { x }";
+
+        let lexer = Lexer::new(input);
+        let program = Parser::new(lexer)
+            .parse_program()
+            .expect("program should be parsable");
+
+        let statements = program.statements;
+
+        assert_eq!(
+            statements.len(),
+            1,
+            "program.Statements should contain 1 statement."
+        );
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                IfExpression {
+                    condition,
+                    consequence,
+                    alternative,
+                } => {
+                    test_infix_expression(
+                        condition,
+                        Str("x".to_owned()),
+                        "<".to_owned(),
+                        Str("y".to_owned()),
+                    );
+                    assert_eq!(consequence.statements.len(), 1);
+                    match &consequence.statements[0] {
+                        Statement::Expr(ExpressionStatement { expression }) => {
+                            test_identifier(expression, "x".to_string())
+                        }
+                        other => panic!("expected ExpressionStatement but got {:?}", other),
+                    };
+                    assert_eq!(*alternative, None)
+                }
+                other => panic!("expected IfExpression but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_if_else_expression() {
+        let input = "if (x < y) { x } else { y }";
+
+        let lexer = Lexer::new(input);
+        let program = Parser::new(lexer)
+            .parse_program()
+            .expect("program should be parsable");
+
+        let statements = program.statements;
+
+        assert_eq!(
+            statements.len(),
+            1,
+            "program.Statements should contain 1 statement."
+        );
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                IfExpression {
+                    condition,
+                    consequence,
+                    alternative,
+                } => {
+                    test_infix_expression(
+                        condition,
+                        Str("x".to_owned()),
+                        "<".to_owned(),
+                        Str("y".to_owned()),
+                    );
+                    assert_eq!(consequence.statements.len(), 1);
+                    match &consequence.statements[0] {
+                        Statement::Expr(ExpressionStatement { expression }) => {
+                            test_identifier(expression, "x".to_owned())
+                        }
+                        other => panic!("expected ExpressionStatement but got {:?}", other),
+                    };
+
+                    match alternative {
+                        Some(block) => {
+                            assert_eq!(block.statements.len(), 1);
+                            match &block.statements[0] {
+                                Statement::Expr(ExpressionStatement { expression }) => {
+                                    test_identifier(&expression, "y".to_owned())
+                                }
+                                other => panic!("expected ExpressionStatement but got {:?}", other),
+                            }
+                        }
+                        None => panic!("expected Some but got None"),
+                    }
+                }
+                other => panic!("expected IfExpression but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
         }
     }
 }

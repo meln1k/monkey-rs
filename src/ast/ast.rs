@@ -1,4 +1,3 @@
-use crate::lexer::token::Token;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -9,11 +8,12 @@ pub enum Node {
     Expr(Expression),
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Statement {
     Let(LetStatement),
     Return(ReturnStatement),
     Expr(ExpressionStatement),
+    Block(BlockStatement),
 }
 
 #[derive(PartialEq, Debug)]
@@ -30,6 +30,11 @@ pub enum Expression {
         right: Box<Expression>,
     },
     Boolean(bool),
+    IfExpression {
+        condition: Box<Expression>,
+        consequence: Box<BlockStatement>,
+        alternative: Option<Box<BlockStatement>>,
+    },
 }
 
 #[derive(Debug)]
@@ -37,20 +42,25 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct LetStatement {
     pub name: String,
     pub value: Expression,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ReturnStatement {
     pub return_value: Expression,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct ExpressionStatement {
     pub expression: Expression,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct BlockStatement {
+    pub statements: Vec<Statement>,
 }
 
 impl Display for Program {
@@ -75,6 +85,7 @@ impl Display for Statement {
                 write!(f, "return {};", return_value)
             }
             Statement::Expr(ExpressionStatement { expression }) => write!(f, "{}", expression),
+            Statement::Block(block_statement) => write!(f, "{}", block_statement.to_string()),
         }
     }
 }
@@ -91,14 +102,33 @@ impl Display for Expression {
                 right,
             } => write!(f, "({} {} {})", left, operator, right),
             Expression::Boolean(b) => write!(f, "{}", b),
+            Expression::IfExpression {
+                condition,
+                consequence,
+                alternative,
+            } => {
+                write!(f, "if{} {}", condition.to_string(), consequence.to_string())?;
+                match alternative {
+                    Some(block) => write!(f, "else {}", block.to_string()),
+                    None => Ok(()),
+                }
+            }
         }
+    }
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for s in &self.statements {
+            write!(f, "{}", s.to_string())?
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::ast::ast::Expression::Identifier;
-    use crate::ast::ast::Node;
     use crate::ast::ast::{LetStatement, Program, Statement};
 
     #[test]
