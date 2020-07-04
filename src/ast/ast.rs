@@ -21,12 +21,12 @@ pub enum Expression {
     Identifier(String),
     IntegerLiteral(i64),
     PrefixExpression {
-        operator: String,
+        operator: Operator,
         expr: Box<Expression>,
     },
     InfixExpression {
         left: Box<Expression>,
-        operator: String,
+        operator: Operator,
         right: Box<Expression>,
     },
     Boolean(bool),
@@ -61,6 +61,21 @@ pub struct ExpressionStatement {
 #[derive(PartialEq, Debug)]
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(PartialEq, Debug)]
+pub enum Operator {
+    ASSIGN,
+    PLUS,
+    MINUS,
+    BANG,
+    ASTERISK,
+    SLASH,
+    LT,
+    GT,
+    EQ,
+    NOT_EQ,
 }
 
 impl Display for Program {
@@ -114,6 +129,24 @@ impl Display for Expression {
                 }
             }
         }
+    }
+}
+
+impl Display for Operator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let str = match self {
+            Operator::ASSIGN => "=",
+            Operator::PLUS => "+",
+            Operator::MINUS => "-",
+            Operator::BANG => "!",
+            Operator::ASTERISK => "*",
+            Operator::SLASH => "/",
+            Operator::LT => "<",
+            Operator::GT => ">",
+            Operator::EQ => "==",
+            Operator::NOT_EQ => "!=",
+        };
+        write!(f, "{}", str)
     }
 }
 

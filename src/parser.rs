@@ -1,8 +1,5 @@
 use crate::ast::ast::Expression::{IfExpression, InfixExpression};
-use crate::ast::ast::{
-    BlockStatement, Expression, ExpressionStatement, LetStatement, Program, ReturnStatement,
-    Statement,
-};
+use crate::ast::ast::{BlockStatement, Expression, ExpressionStatement, LetStatement, Program, ReturnStatement, Statement, Operator};
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
 use crate::parser::Precedence::{LOWEST, PREFIX};
@@ -168,22 +165,20 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_prefix_expression(parser: &mut Parser) -> ParsingResult<Expression> {
-        let token_str = match &parser.cur_token {
-            Token::BANG => Ok("!".to_owned()),
-            Token::MINUS => Ok("-".to_owned()),
+        let operator = match &parser.cur_token {
+            Token::BANG => Ok(Operator::BANG),
+            Token::MINUS => Ok(Operator::MINUS),
             other => Err(format!("Expected prefix token but got {:?}", other)),
-        };
+        }?;
 
         parser.advance_token();
 
-        token_str.and_then(|operator| {
-            parser
-                .parse_expression(PREFIX)
-                .map(|expr| Expression::PrefixExpression {
-                    operator,
-                    expr: Box::new(expr),
-                })
-        })
+        parser
+            .parse_expression(PREFIX)
+            .map(|expr| Expression::PrefixExpression {
+                operator,
+                expr: Box::new(expr),
+            })
     }
 
     fn parse_if_expression(parser: &mut Parser) -> ParsingResult<Expression> {
@@ -223,14 +218,14 @@ impl<'a> Parser<'a> {
 
     fn parse_infix_expression(parser: &mut Parser, left: Expression) -> ParsingResult<Expression> {
         let operator = match &parser.cur_token {
-            Token::PLUS => Ok("+".to_owned()),
-            Token::MINUS => Ok("-".to_owned()),
-            Token::SLASH => Ok("/".to_owned()),
-            Token::ASTERISK => Ok("*".to_owned()),
-            Token::EQ => Ok("==".to_owned()),
-            Token::NOT_EQ => Ok("!=".to_owned()),
-            Token::LT => Ok("<".to_owned()),
-            Token::GT => Ok(">".to_owned()),
+            Token::PLUS => Ok(Operator::PLUS),
+            Token::MINUS => Ok(Operator::MINUS),
+            Token::SLASH => Ok(Operator::SLASH),
+            Token::ASTERISK => Ok(Operator::ASTERISK),
+            Token::EQ => Ok(Operator::EQ),
+            Token::NOT_EQ => Ok(Operator::NOT_EQ),
+            Token::LT => Ok(Operator::LT),
+            Token::GT => Ok(Operator::GT),
             other => Err(format!("Expected infix operator but got {:?}", other)),
         }?;
 
@@ -326,10 +321,11 @@ type InfixParseFn = fn(parser: &mut Parser<'_>, left: Expression) -> ParsingResu
 #[cfg(test)]
 mod tests {
     use crate::ast::ast::Expression::*;
-    use crate::ast::ast::{Expression, ExpressionStatement, ReturnStatement, Statement};
+    use crate::ast::ast::{Expression, ExpressionStatement, ReturnStatement, Statement, Operator};
     use crate::lexer::lexer::Lexer;
     use crate::parser::tests::ExpectedExprValue::Str;
     use crate::parser::Parser;
+    use crate::ast::ast::Operator::LT;
 
     #[test]
     fn test_let_statements() {
@@ -451,7 +447,6 @@ mod tests {
     #[test]
     fn test_parsing_prefix_expr() {
         type Input = String;
-        type Operator = String;
         type Value = ExpectedExprValue;
 
         struct PrefixTest(Input, Operator, Value);
@@ -459,10 +454,10 @@ mod tests {
         use ExpectedExprValue::*;
 
         let prefix_tests = vec![
-            PrefixTest("!5;".to_owned(), "!".to_owned(), Int(5)),
-            PrefixTest("-15;".to_owned(), "-".to_owned(), Int(15)),
-            PrefixTest("!true;".to_owned(), "!".to_owned(), Bool(true)),
-            PrefixTest("!false;".to_owned(), "!".to_owned(), Bool(false)),
+            PrefixTest("!5;".to_owned(), Operator::BANG, Int(5)),
+            PrefixTest("-15;".to_owned(), Operator::MINUS, Int(15)),
+            PrefixTest("!true;".to_owned(), Operator::BANG, Bool(true)),
+            PrefixTest("!false;".to_owned(), Operator::BANG, Bool(false)),
         ];
 
         for PrefixTest(input, op, intval) in prefix_tests {
@@ -529,7 +524,7 @@ mod tests {
     fn test_infix_expression(
         expr: &Expression,
         l: ExpectedExprValue,
-        op: String,
+        op: Operator,
         r: ExpectedExprValue,
     ) {
         match expr {
@@ -549,39 +544,39 @@ mod tests {
     #[test]
     fn test_parsing_infix_expr() {
         type Input = String;
-        type Operator = String;
         type LeftValue = ExpectedExprValue;
         type RightValue = ExpectedExprValue;
 
         use ExpectedExprValue::*;
+        use Operator::*;
 
         struct InfixTest(Input, LeftValue, Operator, RightValue);
 
         let infix_tests = vec![
-            InfixTest("5 + 5;".to_owned(), Int(5), "+".to_owned(), Int(5)),
-            InfixTest("5 - 5;".to_owned(), Int(5), "-".to_owned(), Int(5)),
-            InfixTest("5 * 5;".to_owned(), Int(5), "*".to_owned(), Int(5)),
-            InfixTest("5 / 5;".to_owned(), Int(5), "/".to_owned(), Int(5)),
-            InfixTest("5 > 5;".to_owned(), Int(5), ">".to_owned(), Int(5)),
-            InfixTest("5 < 5;".to_owned(), Int(5), "<".to_owned(), Int(5)),
-            InfixTest("5 == 5;".to_owned(), Int(5), "==".to_owned(), Int(5)),
-            InfixTest("5 != 5;".to_owned(), Int(5), "!=".to_owned(), Int(5)),
+            InfixTest("5 + 5;".to_owned(), Int(5), PLUS, Int(5)),
+            InfixTest("5 - 5;".to_owned(), Int(5), MINUS, Int(5)),
+            InfixTest("5 * 5;".to_owned(), Int(5), ASTERISK, Int(5)),
+            InfixTest("5 / 5;".to_owned(), Int(5), SLASH, Int(5)),
+            InfixTest("5 > 5;".to_owned(), Int(5), GT, Int(5)),
+            InfixTest("5 < 5;".to_owned(), Int(5), LT, Int(5)),
+            InfixTest("5 == 5;".to_owned(), Int(5), EQ, Int(5)),
+            InfixTest("5 != 5;".to_owned(), Int(5), NOT_EQ, Int(5)),
             InfixTest(
                 "true == true".to_owned(),
                 Bool(true),
-                "==".to_owned(),
+                EQ,
                 Bool(true),
             ),
             InfixTest(
                 "true != false".to_owned(),
                 Bool(true),
-                "!=".to_owned(),
+                NOT_EQ,
                 Bool(false),
             ),
             InfixTest(
                 "false == false".to_owned(),
                 Bool(false),
-                "==".to_owned(),
+                EQ,
                 Bool(false),
             ),
         ];
@@ -731,7 +726,7 @@ mod tests {
                     test_infix_expression(
                         condition,
                         Str("x".to_owned()),
-                        "<".to_owned(),
+                        LT,
                         Str("y".to_owned()),
                     );
                     assert_eq!(consequence.statements.len(), 1);
@@ -776,7 +771,7 @@ mod tests {
                     test_infix_expression(
                         condition,
                         Str("x".to_owned()),
-                        "<".to_owned(),
+                        LT,
                         Str("y".to_owned()),
                     );
                     assert_eq!(consequence.statements.len(), 1);
