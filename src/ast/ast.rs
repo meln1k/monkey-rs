@@ -35,6 +35,10 @@ pub enum Expression {
         consequence: Box<BlockStatement>,
         alternative: Option<Box<BlockStatement>>,
     },
+    FunctionLiteral {
+        parameters: Vec<String>,
+        body: BlockStatement,
+    },
 }
 
 #[derive(Debug)]
@@ -127,6 +131,9 @@ impl Display for Expression {
                     Some(block) => write!(f, "else {}", block.to_string()),
                     None => Ok(()),
                 }
+            }
+            Expression::FunctionLiteral { parameters, body } => {
+                write!(f, "fn({}){}", parameters.join(", "), body.to_string())
             }
         }
     }
