@@ -11,7 +11,7 @@ type ParsingError = String;
 type ParsingErrors = Vec<ParsingError>;
 type ParsingResult<T> = Result<T, ParsingError>;
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
     cur_token: Token,
     peek_token: Token,
@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
         self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token());
     }
 
-    fn parse_program(mut self) -> Result<Program, ParsingErrors> {
+    pub fn parse_program(mut self) -> Result<Program, ParsingErrors> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
