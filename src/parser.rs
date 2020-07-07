@@ -71,30 +71,31 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_let_statement(&mut self) -> ParsingResult<LetStatement> {
-        let ident_name = self.expect_ident()?;
+        let name = self.expect_ident()?;
+
         self.expect_peek(Token::ASSIGN)?;
 
-        // todo: do not just skip
-        while !self.current_token_is(Token::SEMICOLON) {
+        self.advance_token();
+
+        let value = self.parse_expression(LOWEST)?;
+
+        if self.peek_token_is(&Token::SEMICOLON) {
             self.advance_token();
         }
 
-        Ok(LetStatement {
-            name: ident_name,
-            value: Expression::Identifier("replace me".to_string()),
-        })
+        Ok(LetStatement { name, value })
     }
 
     fn parse_return_statement(&mut self) -> ParsingResult<ReturnStatement> {
         self.advance_token();
 
-        while !self.current_token_is(Token::SEMICOLON) {
+        let return_value = self.parse_expression(LOWEST)?;
+
+        if self.peek_token_is(&Token::SEMICOLON) {
             self.advance_token();
         }
 
-        Ok(ReturnStatement {
-            return_value: Expression::Identifier("not implemented yet".to_owned()),
-        })
+        Ok(ReturnStatement { return_value })
     }
 
     fn parse_expr_statement(&mut self) -> ParsingResult<ExpressionStatement> {
@@ -405,36 +406,51 @@ mod tests {
     use crate::ast::ast::Expression::*;
     use crate::ast::ast::Node::Expr;
     use crate::ast::ast::Operator::LT;
-    use crate::ast::ast::{Expression, ExpressionStatement, Operator, ReturnStatement, Statement};
+    use crate::ast::ast::{
+        Expression, ExpressionStatement, LetStatement, Operator, ReturnStatement, Statement,
+    };
     use crate::lexer::lexer::Lexer;
-    use crate::parser::tests::ExpectedExprValue::{Int, Str};
+    use crate::parser::tests::ExpectedExprValue::{Bool, Int, Str};
     use crate::parser::Parser;
 
     #[test]
     fn test_let_statements() {
-        let input = "
-        let x = 5;
-        let y = 10;
-        let foobar = 838383;
-        ";
+        struct Test(String, String, ExpectedExprValue);
 
-        let lexer = Lexer::new(input);
-        let parser = Parser::new(lexer);
+        let tests = vec![
+            Test("let x = 5;".to_owned(), "x".to_owned(), Int(5)),
+            Test("let y = true;".to_owned(), "y".to_owned(), Bool(true)),
+            Test(
+                "let foobar = y;".to_owned(),
+                "foobar".to_owned(),
+                Str("y".to_owned()),
+            ),
+        ];
 
-        let program = parser.parse_program().expect("program should be parsable");
-        let statements = program.statements;
+        for Test(input, expected_identifier, expected_value) in tests {
+            let lexer = Lexer::new(&input);
+            let parser = Parser::new(lexer);
 
-        assert_eq!(
-            statements.len(),
-            3,
-            "program.Statements does not contain 3 statements. got {}",
-            statements.len()
-        );
+            let program = parser.parse_program().expect("program should be parsable");
 
-        let tests = vec!["x", "y", "foobar"];
+            let statements = program.statements;
 
-        for (id, test_str) in tests.iter().enumerate() {
-            test_let_statement(&statements[id], *test_str)
+            assert_eq!(
+                statements.len(),
+                1,
+                "program.Statements does not contain 1 statement."
+            );
+
+            let statement = &statements[0];
+
+            test_let_statement(statement, &expected_identifier);
+
+            match statement {
+                Statement::Let(LetStatement { name, value }) => {
+                    test_literal_expression(value, expected_value);
+                }
+                other => panic!("Expected Let but got {:?}", other),
+            }
         }
     }
 
