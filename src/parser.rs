@@ -1,4 +1,4 @@
-use crate::ast::ast::Expression::{FunctionLiteral, IfExpression, InfixExpression};
+use crate::ast::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
 use crate::ast::ast::{
     BlockStatement, Expression, ExpressionStatement, LetStatement, Operator, Program,
     ReturnStatement, Statement,
@@ -289,6 +289,36 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_call_expression(parser: &mut Parser, func: Expression) -> ParsingResult<Expression> {
+        let arguments = parser.parse_call_arguments()?;
+        let function = Box::new(func);
+        Ok(CallExpression {
+            function,
+            arguments,
+        })
+    }
+
+    fn parse_call_arguments(&mut self) -> ParsingResult<Vec<Expression>> {
+        let mut arguments = Vec::new();
+        if self.peek_token_is(&Token::RPAREN) {
+            self.advance_token();
+            return Ok(arguments);
+        }
+
+        self.advance_token();
+        arguments.push(self.parse_expression(LOWEST)?);
+
+        while self.peek_token_is(&Token::COMMA) {
+            self.advance_token();
+            self.advance_token();
+            arguments.push(self.parse_expression(LOWEST)?);
+        }
+
+        self.expect_peek(Token::RPAREN)?;
+
+        Ok(arguments)
+    }
+
     fn current_token_is(&self, t: Token) -> bool {
         self.cur_token == t
     }
@@ -345,6 +375,7 @@ impl<'a> Parser<'a> {
             | Token::NOT_EQ
             | Token::LT
             | Token::GT => Some(Parser::parse_infix_expression),
+            Token::LPAREN => Some(Parser::parse_call_expression),
             _ => None,
         }
     }
@@ -361,6 +392,7 @@ fn precedences(token: &Token) -> Precedence {
         Token::MINUS => SUM,
         Token::SLASH => PRODUCT,
         Token::ASTERISK => PRODUCT,
+        Token::LPAREN => CALL,
         _ => LOWEST,
     }
 }
@@ -375,7 +407,7 @@ mod tests {
     use crate::ast::ast::Operator::LT;
     use crate::ast::ast::{Expression, ExpressionStatement, Operator, ReturnStatement, Statement};
     use crate::lexer::lexer::Lexer;
-    use crate::parser::tests::ExpectedExprValue::Str;
+    use crate::parser::tests::ExpectedExprValue::{Int, Str};
     use crate::parser::Parser;
 
     #[test]
@@ -686,6 +718,18 @@ mod tests {
             Test("2 / (5 + 5)".to_owned(), "(2 / (5 + 5))".to_owned()),
             Test("-(5 + 5)".to_owned(), "(-(5 + 5))".to_owned()),
             Test("!(true == true)".to_owned(), "(!(true == true))".to_owned()),
+            Test(
+                "a + add(b * c) + d".to_owned(),
+                "((a + add((b * c))) + d)".to_owned(),
+            ),
+            Test(
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))".to_owned(),
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_owned(),
+            ),
+            Test(
+                "add(a + b + c * d / f + g)".to_owned(),
+                "add((((a + b) + ((c * d) / f)) + g))".to_owned(),
+            ),
         ];
 
         for Test(input, expected) in tests {
@@ -907,6 +951,37 @@ mod tests {
                 },
                 other => panic!("expected ExpressionStatement but got {:?}", other),
             }
+        }
+    }
+
+    #[test]
+    fn test_parsing_call_expression() {
+        let input = "add(1, 2 * 3, 4 + 5)";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                CallExpression {
+                    function,
+                    arguments,
+                } => {
+                    assert_eq!(**function, Identifier("add".to_owned()));
+                    assert_eq!(arguments.len(), 3);
+                    test_literal_expression(&arguments[0], Int(1));
+                    test_infix_expression(&arguments[1], Int(2), Operator::ASTERISK, Int(3));
+                    test_infix_expression(&arguments[2], Int(4), Operator::PLUS, Int(5));
+                }
+                other => panic!("expected CallExpression but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
         }
     }
 }

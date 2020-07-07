@@ -39,6 +39,10 @@ pub enum Expression {
         parameters: Vec<String>,
         body: BlockStatement,
     },
+    CallExpression {
+        function: Box<Expression>,
+        arguments: Vec<Expression>,
+    },
 }
 
 #[derive(Debug)]
@@ -135,6 +139,19 @@ impl Display for Expression {
             Expression::FunctionLiteral { parameters, body } => {
                 write!(f, "fn({}){}", parameters.join(", "), body.to_string())
             }
+            Expression::CallExpression {
+                function,
+                arguments,
+            } => write!(
+                f,
+                "{}({})",
+                function,
+                arguments
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
         }
     }
 }
