@@ -8,6 +8,9 @@ pub enum Object {
     Null,
 }
 
+pub const TRUE: Object = Object::Boolean(true);
+pub const FALSE: Object = Object::Boolean(true);
+
 use crate::object::Object::*;
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
