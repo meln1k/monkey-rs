@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
 use core::fmt;
+use std::fmt::{Display, Formatter};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Object {
     Integer(i64),
     Boolean(bool),
@@ -9,7 +9,7 @@ pub enum Object {
 }
 
 pub const TRUE: Object = Object::Boolean(true);
-pub const FALSE: Object = Object::Boolean(true);
+pub const FALSE: Object = Object::Boolean(false);
 
 use crate::object::Object::*;
 impl Display for Object {

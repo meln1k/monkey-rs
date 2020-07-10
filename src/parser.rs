@@ -1,7 +1,7 @@
 use crate::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
 use crate::ast::{
-    BlockStatement, Expression, ExpressionStatement, LetStatement, Operator, Program,
-    ReturnStatement, Statement,
+    BlockStatement, Expression, ExpressionStatement, InfixOperator, LetStatement, PrefixOperator,
+    Program, ReturnStatement, Statement,
 };
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::Token;
@@ -185,8 +185,8 @@ impl<'a> Parser<'a> {
 
     fn parse_prefix_expression(&mut self) -> ParsingResult<Expression> {
         let operator = match &self.cur_token {
-            Token::BANG => Ok(Operator::BANG),
-            Token::MINUS => Ok(Operator::MINUS),
+            Token::BANG => Ok(PrefixOperator::BANG),
+            Token::MINUS => Ok(PrefixOperator::MINUS),
             other => Err(format!("Expected prefix token but got {:?}", other)),
         }?;
 
@@ -282,14 +282,14 @@ impl<'a> Parser<'a> {
 
     fn parse_infix_expression(&mut self, left: Expression) -> ParsingResult<Expression> {
         let operator = match &self.cur_token {
-            Token::PLUS => Ok(Operator::PLUS),
-            Token::MINUS => Ok(Operator::MINUS),
-            Token::SLASH => Ok(Operator::SLASH),
-            Token::ASTERISK => Ok(Operator::ASTERISK),
-            Token::EQ => Ok(Operator::EQ),
-            Token::NOT_EQ => Ok(Operator::NOT_EQ),
-            Token::LT => Ok(Operator::LT),
-            Token::GT => Ok(Operator::GT),
+            Token::PLUS => Ok(InfixOperator::PLUS),
+            Token::MINUS => Ok(InfixOperator::MINUS),
+            Token::SLASH => Ok(InfixOperator::SLASH),
+            Token::ASTERISK => Ok(InfixOperator::ASTERISK),
+            Token::EQ => Ok(InfixOperator::EQ),
+            Token::NOT_EQ => Ok(InfixOperator::NOT_EQ),
+            Token::LT => Ok(InfixOperator::LT),
+            Token::GT => Ok(InfixOperator::GT),
             other => Err(format!("Expected infix operator but got {:?}", other)),
         }?;
 
@@ -387,9 +387,10 @@ fn precedences(token: &Token) -> Precedence {
 #[cfg(test)]
 mod tests {
     use crate::ast::Expression::*;
-    use crate::ast::Operator::LT;
+    use crate::ast::InfixOperator::LT;
     use crate::ast::{
-        Expression, ExpressionStatement, LetStatement, Operator, ReturnStatement, Statement,
+        Expression, ExpressionStatement, InfixOperator, LetStatement, PrefixOperator,
+        ReturnStatement, Statement,
     };
     use crate::lexer::lexer::Lexer;
     use crate::parser::tests::ExpectedExprValue::{Bool, Int, Str};
@@ -532,15 +533,15 @@ mod tests {
         type Input = String;
         type Value = ExpectedExprValue;
 
-        struct PrefixTest(Input, Operator, Value);
+        struct PrefixTest(Input, PrefixOperator, Value);
 
         use ExpectedExprValue::*;
 
         let prefix_tests = vec![
-            PrefixTest("!5;".to_owned(), Operator::BANG, Int(5)),
-            PrefixTest("-15;".to_owned(), Operator::MINUS, Int(15)),
-            PrefixTest("!true;".to_owned(), Operator::BANG, Bool(true)),
-            PrefixTest("!false;".to_owned(), Operator::BANG, Bool(false)),
+            PrefixTest("!5;".to_owned(), PrefixOperator::BANG, Int(5)),
+            PrefixTest("-15;".to_owned(), PrefixOperator::MINUS, Int(15)),
+            PrefixTest("!true;".to_owned(), PrefixOperator::BANG, Bool(true)),
+            PrefixTest("!false;".to_owned(), PrefixOperator::BANG, Bool(false)),
         ];
 
         for PrefixTest(input, op, intval) in prefix_tests {
@@ -607,7 +608,7 @@ mod tests {
     fn test_infix_expression(
         expr: &Expression,
         l: ExpectedExprValue,
-        op: Operator,
+        op: InfixOperator,
         r: ExpectedExprValue,
     ) {
         match expr {
@@ -631,9 +632,9 @@ mod tests {
         type RightValue = ExpectedExprValue;
 
         use ExpectedExprValue::*;
-        use Operator::*;
+        use InfixOperator::*;
 
-        struct InfixTest(Input, LeftValue, Operator, RightValue);
+        struct InfixTest(Input, LeftValue, InfixOperator, RightValue);
 
         let infix_tests = vec![
             InfixTest("5 + 5;".to_owned(), Int(5), PLUS, Int(5)),
@@ -904,7 +905,7 @@ mod tests {
                             } => {
                                 assert_eq!(**left, Expression::Identifier("x".to_owned()));
                                 assert_eq!(**right, Expression::Identifier("y".to_owned()));
-                                assert_eq!(*operator, Operator::PLUS)
+                                assert_eq!(*operator, InfixOperator::PLUS)
                             }
                             other => panic!("expected InfixExpression but got {:?}", other),
                         },
@@ -979,8 +980,8 @@ mod tests {
                     assert_eq!(**function, Identifier("add".to_owned()));
                     assert_eq!(arguments.len(), 3);
                     test_literal_expression(&arguments[0], Int(1));
-                    test_infix_expression(&arguments[1], Int(2), Operator::ASTERISK, Int(3));
-                    test_infix_expression(&arguments[2], Int(4), Operator::PLUS, Int(5));
+                    test_infix_expression(&arguments[1], Int(2), InfixOperator::ASTERISK, Int(3));
+                    test_infix_expression(&arguments[2], Int(4), InfixOperator::PLUS, Int(5));
                 }
                 other => panic!("expected CallExpression but got {:?}", other),
             },

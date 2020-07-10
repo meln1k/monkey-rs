@@ -21,12 +21,12 @@ pub enum Expression {
     Identifier(String),
     IntegerLiteral(i64),
     PrefixExpression {
-        operator: Operator,
+        operator: PrefixOperator,
         expr: Box<Expression>,
     },
     InfixExpression {
         left: Box<Expression>,
-        operator: Operator,
+        operator: InfixOperator,
         right: Box<Expression>,
     },
     Boolean(bool),
@@ -73,17 +73,22 @@ pub struct BlockStatement {
 
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, Debug)]
-pub enum Operator {
+pub enum InfixOperator {
     ASSIGN,
     PLUS,
     MINUS,
-    BANG,
     ASTERISK,
     SLASH,
     LT,
     GT,
     EQ,
     NOT_EQ,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum PrefixOperator {
+    MINUS,
+    BANG,
 }
 
 impl Display for Program {
@@ -156,19 +161,28 @@ impl Display for Expression {
     }
 }
 
-impl Display for Operator {
+impl Display for InfixOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let str = match self {
-            Operator::ASSIGN => "=",
-            Operator::PLUS => "+",
-            Operator::MINUS => "-",
-            Operator::BANG => "!",
-            Operator::ASTERISK => "*",
-            Operator::SLASH => "/",
-            Operator::LT => "<",
-            Operator::GT => ">",
-            Operator::EQ => "==",
-            Operator::NOT_EQ => "!=",
+            InfixOperator::ASSIGN => "=",
+            InfixOperator::PLUS => "+",
+            InfixOperator::MINUS => "-",
+            InfixOperator::ASTERISK => "*",
+            InfixOperator::SLASH => "/",
+            InfixOperator::LT => "<",
+            InfixOperator::GT => ">",
+            InfixOperator::EQ => "==",
+            InfixOperator::NOT_EQ => "!=",
+        };
+        write!(f, "{}", str)
+    }
+}
+
+impl Display for PrefixOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let str = match self {
+            PrefixOperator::MINUS => "-",
+            PrefixOperator::BANG => "!",
         };
         write!(f, "{}", str)
     }
