@@ -16,13 +16,9 @@ pub fn start() {
             Ok(_) => {
                 let lexer = Lexer::new(&buffer);
                 let parser = Parser::new(lexer);
-                match parser.parse_program()  {
-                    Ok(program) => {
-                        println!("{}", program)
-                    },
-                    Err(err) => {
-                        println!("Parsing error: {}", err.join(", "))
-                    }
+                match parser.parse_program() {
+                    Ok(program) => println!("{}", program),
+                    Err(err) => println!("Parsing error: {}", err.join(", ")),
                 };
             }
             Err(err) => {

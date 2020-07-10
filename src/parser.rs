@@ -1,5 +1,5 @@
-use crate::ast::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
-use crate::ast::ast::{
+use crate::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
+use crate::ast::{
     BlockStatement, Expression, ExpressionStatement, LetStatement, Operator, Program,
     ReturnStatement, Statement,
 };
@@ -386,9 +386,9 @@ fn precedences(token: &Token) -> Precedence {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::ast::Expression::*;
-    use crate::ast::ast::Operator::LT;
-    use crate::ast::ast::{
+    use crate::ast::Expression::*;
+    use crate::ast::Operator::LT;
+    use crate::ast::{
         Expression, ExpressionStatement, LetStatement, Operator, ReturnStatement, Statement,
     };
     use crate::lexer::lexer::Lexer;
@@ -469,7 +469,7 @@ mod tests {
             match &statements[id] {
                 Statement::Return(ReturnStatement { return_value }) => {
                     test_literal_expression(return_value, Int(*expected))
-                },
+                }
                 other => panic!("Expected Return but got {:?}", other),
             }
         }
@@ -940,7 +940,10 @@ mod tests {
 
             match &statements[0] {
                 Statement::Expr(ExpressionStatement { expression }) => match expression {
-                    FunctionLiteral { parameters, body: _ } => {
+                    FunctionLiteral {
+                        parameters,
+                        body: _,
+                    } => {
                         assert_eq!(expected_parameters.len(), parameters.len());
 
                         for (i, param) in expected_parameters.iter().enumerate() {

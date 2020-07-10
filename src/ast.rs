@@ -185,8 +185,8 @@ impl Display for BlockStatement {
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::ast::Expression::Identifier;
-    use crate::ast::ast::{LetStatement, Program, Statement};
+    use crate::ast::Expression::Identifier;
+    use crate::ast::{LetStatement, Program, Statement};
 
     #[test]
     fn test_to_string() {
