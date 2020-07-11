@@ -20,6 +20,7 @@ pub enum Statement {
 pub enum Expression {
     Identifier(String),
     IntegerLiteral(i64),
+    FloatLiteral(f64),
     PrefixExpression {
         operator: PrefixOperator,
         expr: Box<Expression>,
@@ -122,6 +123,7 @@ impl Display for Expression {
         match self {
             Expression::Identifier(s) => write!(f, "{}", s),
             Expression::IntegerLiteral(n) => write!(f, "{}", n),
+            Expression::FloatLiteral(n) => write!(f, "{}", n),
             Expression::PrefixExpression { operator, expr } => write!(f, "({}{})", operator, expr),
             Expression::InfixExpression {
                 left,

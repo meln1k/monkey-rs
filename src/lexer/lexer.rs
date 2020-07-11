@@ -52,8 +52,12 @@ impl<'a> Lexer<'a> {
                     lookup_ident(literal)
                 }
                 d if d.is_ascii_digit() => {
-                    let literal = self.read_number(d);
-                    INT(literal)
+                    let (literal, is_float) = self.read_number(d);
+                    if is_float {
+                        FLOAT(literal)
+                    } else {
+                        INT(literal)
+                    }
                 }
                 _ => ILLEGAL,
             },
@@ -75,18 +79,25 @@ impl<'a> Lexer<'a> {
         literal
     }
 
-    fn read_number(&mut self, head: char) -> String {
+    fn read_number(&mut self, head: char) -> (String, bool) {
         let mut literal = String::new();
+        let mut fraction_seen = false;
         literal.push(head);
         while let Some(&ch) = self.peekable.peek() {
-            if ch.is_ascii_digit() {
-                literal.push(ch);
-                self.peekable.next();
-            } else {
-                break;
+            match ch {
+                c if c.is_ascii_digit() => {
+                    literal.push(ch);
+                    self.peekable.next();
+                }
+                '.' if !fraction_seen => {
+                    literal.push(ch);
+                    fraction_seen = true;
+                    self.peekable.next();
+                }
+                _ => break,
             }
         }
-        literal
+        (literal, fraction_seen)
     }
 
     fn skip_whitespace(&mut self) {
@@ -122,6 +133,7 @@ mod tests {
     fn test_next_token() {
         let input = "let five = 5;
         let ten = 10;
+        let pi = 3.14;
 
         let add = fn(x, y) {
           x + y;
@@ -154,6 +166,11 @@ mod tests {
             TestInput(IDENT("ten".to_owned())),
             TestInput(ASSIGN),
             TestInput(INT("10".to_owned())),
+            TestInput(SEMICOLON),
+            TestInput(LET),
+            TestInput(IDENT("pi".to_owned())),
+            TestInput(ASSIGN),
+            TestInput(FLOAT("3.14".to_owned())),
             TestInput(SEMICOLON),
             TestInput(LET),
             TestInput(IDENT("add".to_owned())),
