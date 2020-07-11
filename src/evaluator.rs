@@ -27,7 +27,7 @@ fn eval_statements(statements: Vec<Statement>) -> EvalResult {
         obj = Some(evaluated);
     }
 
-    obj.ok_or("no statements provided".to_string())
+    Ok(obj.unwrap_or(Object::Null))
 }
 
 fn eval_statement(statement: Statement) -> EvalResult {
@@ -73,7 +73,7 @@ fn eval_expression(expression: Expression) -> EvalResult {
                     None => Ok(Object::Null),
                 },
                 other => Err(format!(
-                    "if expression can only use bool as a condition, but got {}",
+                    "type mismatch: expected bool, but got {}",
                     other
                 )),
             }
@@ -105,14 +105,20 @@ fn eval_infix_expression(operator: InfixOperator, left: Object, right: Object) -
             InfixOperator::EQ => Ok(native_bool_to_boolean_object(l == r)),
             InfixOperator::NOT_EQ => Ok(native_bool_to_boolean_object(l != r)),
         },
-        (left, right) => match operator {
-            InfixOperator::EQ => Ok(native_bool_to_boolean_object(left == right)),
-            InfixOperator::NOT_EQ => Ok(native_bool_to_boolean_object(left != right)),
-            other => Err(format!(
-                "can't use {} operator with {}{}",
-                other, left, right
-            )),
+        (left, right) if std::mem::discriminant(&left) == std::mem::discriminant(&right) => {
+            match operator {
+                InfixOperator::EQ => Ok(native_bool_to_boolean_object(left == right)),
+                InfixOperator::NOT_EQ => Ok(native_bool_to_boolean_object(left != right)),
+                other => Err(format!(
+                    "unknown operator: {} {} {}",
+                    left, other, right
+                )),
+            }
         },
+        (left, right) => Err(format!(
+            "type mismatch: {} {} {}",
+            left, operator, right
+        ))
     }
 }
 
@@ -120,7 +126,7 @@ fn eval_bang_operator_expression(right: Object) -> EvalResult {
     match right {
         Object::Boolean(true) => Ok(FALSE),
         Object::Boolean(false) => Ok(TRUE),
-        other => Err(format!("can't use ! operator with {}", other)),
+        other => Err(format!("unknown operator: !{}", other)),
     }
 }
 
@@ -134,7 +140,7 @@ fn native_bool_to_boolean_object(input: bool) -> Object {
 fn eval_minus_operator_expression(right: Object) -> EvalResult {
     match right {
         Object::Num(int) => Ok(Object::Num(-int)),
-        other => Err(format!("can't use - operator with {}", other)),
+        other => Err(format!("unknown operator: -{}", other)),
     }
 }
 
@@ -273,6 +279,53 @@ fn test_return_statements() {
     for Test(input, expected) in tests {
         let evaluated = test_eval(input).expect("evaluation failed");
         test_integer_object(evaluated, expected)
+    }
+}
+
+#[test]
+fn test_error_handling() {
+    struct Test<'a>(&'a str, &'a str);
+
+    let tests = vec![
+        Test("5 + true;", "type mismatch: 5 + true"),
+        Test("5 + true; 5;", "type mismatch: 5 + true"),
+        Test("-true", "unknown operator: -true"),
+        Test("true + false;", "unknown operator: true + false"),
+        Test("5; true + false; 5", "unknown operator: true + false"),
+        Test(
+            "if (10 > 1) { true + false; }",
+            "unknown operator: true + false",
+        ),
+        Test(
+            r"if (10 > 1) { 
+                if (10 > 1) { 
+                    return true + false; 
+                }
+                return 1;
+            }",
+            "unknown operator: true + false",
+        ),
+        Test(
+            "if (16) { true + false; }",
+            "type mismatch: expected bool, but got 16",
+        ),
+        Test(
+            "1 / 0",
+            "division by 0: 1/0",
+        ),
+        Test(
+            "1. / 0.",
+            "division by 0: 1/0",
+        ),
+    ];
+
+    for Test(input, error_msg) in tests {
+        let evaluated = test_eval(input);
+
+        match evaluated {
+            Ok(_) => panic!("error was not returned"),
+            Err(err) => assert_eq!(err, error_msg),
+        }
     }
 }
 
