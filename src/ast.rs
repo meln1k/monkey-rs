@@ -74,7 +74,6 @@ pub struct BlockStatement {
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, Debug)]
 pub enum InfixOperator {
-    ASSIGN,
     PLUS,
     MINUS,
     ASTERISK,
@@ -164,7 +163,6 @@ impl Display for Expression {
 impl Display for InfixOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let str = match self {
-            InfixOperator::ASSIGN => "=",
             InfixOperator::PLUS => "+",
             InfixOperator::MINUS => "-",
             InfixOperator::ASTERISK => "*",
