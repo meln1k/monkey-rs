@@ -7,6 +7,7 @@ pub enum Object {
     Num(Numeric),
     Boolean(bool),
     Null,
+    ReturnValue(Box<Object>),
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -89,6 +90,7 @@ impl Display for Object {
             Num(n) => write!(f, "{}", n),
             Boolean(b) => write!(f, "{}", b),
             Null => write!(f, "null"),
+            ReturnValue(obj) => write!(f, "{}", *obj),
         }
     }
 }

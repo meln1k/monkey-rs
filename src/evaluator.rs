@@ -19,7 +19,12 @@ fn eval_statements(statements: Vec<Statement>) -> EvalResult {
     let mut obj: Option<Object> = None;
 
     for statement in statements {
-        obj = Some(eval_statement(statement)?);
+        let evaluated = eval_statement(statement)?;
+        if let Object::ReturnValue(object) = evaluated {
+            obj = Some(*object);
+            break;
+        }
+        obj = Some(evaluated);
     }
 
     obj.ok_or("no statements provided".to_string())
@@ -29,6 +34,10 @@ fn eval_statement(statement: Statement) -> EvalResult {
     match statement {
         Statement::Expr(ExpressionStatement { expression }) => eval_expression(expression),
         Statement::Block(BlockStatement { statements }) => eval_statements(statements),
+        Statement::Return(ReturnStatement { return_value }) => {
+            let value = eval_expression(return_value)?;
+            Ok(Object::ReturnValue(Box::new(value)))
+        }
         _ => todo!(),
     }
 }
@@ -247,6 +256,23 @@ fn test_if_else_expressions() {
             Some(int) => test_integer_object(evaluated, int),
             None => assert_eq!(evaluated, Object::Null),
         }
+    }
+}
+
+#[test]
+fn test_return_statements() {
+    struct Test<'a>(&'a str, i64);
+
+    let tests = vec![
+        Test("return 10;", 10),
+        Test("return 10; 9;", 10),
+        Test("return 2 * 5; 9;", 10),
+        Test("9; return 2 * 5; 9;", 10),
+    ];
+
+    for Test(input, expected) in tests {
+        let evaluated = test_eval(input).expect("evaluation failed");
+        test_integer_object(evaluated, expected)
     }
 }
 
