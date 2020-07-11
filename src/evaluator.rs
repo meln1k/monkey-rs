@@ -1,12 +1,30 @@
 use crate::ast::Node::Prog;
 use crate::ast::Statement::Block;
 use crate::ast::*;
+use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
 use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
 use crate::object::{Object, FALSE, TRUE};
 use crate::parser::Parser;
+use std::fmt::{Display, Formatter};
+use core::fmt;
 
-type EvalResult = Result<Object, String>;
+#[derive(Debug)]
+pub enum EvalError {
+    NonLocalReturnControl(Object),
+    Error(String),
+}
+
+impl Display for EvalError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Error(string) => write!(f, "{}", string),
+            NonLocalReturnControl(..) => panic!("NonLocalReturnControl leaked into the error")
+        }
+    }
+}
+
+type EvalResult = Result<Object, EvalError>;
 
 pub fn eval(node: Node) -> EvalResult {
     match node {
@@ -19,12 +37,18 @@ fn eval_statements(statements: Vec<Statement>) -> EvalResult {
     let mut obj: Option<Object> = None;
 
     for statement in statements {
-        let evaluated = eval_statement(statement)?;
-        if let Object::ReturnValue(object) = evaluated {
-            obj = Some(*object);
-            break;
+        match eval_statement(statement) {
+            Ok(object) => {
+                obj = Some(object);
+            }
+            Err(NonLocalReturnControl(object)) => {
+                obj = Some(object);
+                break;
+            }
+            err => {
+                err?;
+            }
         }
-        obj = Some(evaluated);
     }
 
     Ok(obj.unwrap_or(Object::Null))
@@ -36,7 +60,7 @@ fn eval_statement(statement: Statement) -> EvalResult {
         Statement::Block(BlockStatement { statements }) => eval_statements(statements),
         Statement::Return(ReturnStatement { return_value }) => {
             let value = eval_expression(return_value)?;
-            Ok(Object::ReturnValue(Box::new(value)))
+            Err(NonLocalReturnControl(value))
         }
         _ => todo!(),
     }
@@ -72,10 +96,10 @@ fn eval_expression(expression: Expression) -> EvalResult {
                     Some(block) => eval_statement(Block(*block)),
                     None => Ok(Object::Null),
                 },
-                other => Err(format!(
+                other => Err(Error(format!(
                     "type mismatch: expected bool, but got {}",
                     other
-                )),
+                ))),
             }
         }
         _ => todo!(),
@@ -96,8 +120,8 @@ fn eval_infix_expression(operator: InfixOperator, left: Object, right: Object) -
             InfixOperator::MINUS => Ok(Object::Num(l - r)),
             InfixOperator::ASTERISK => Ok(Object::Num(l * r)),
             InfixOperator::SLASH => match r {
-                Integer(0) => Err(format!("division by 0: {}/{}", l, r)),
-                Float(0.0) => Err(format!("division by 0: {}/{}", l, r)),
+                Integer(0) => Err(Error(format!("division by 0: {}/{}", l, r))),
+                Float(0.0) => Err(Error(format!("division by 0: {}/{}", l, r))),
                 _ => Ok(Object::Num(l / r)),
             },
             InfixOperator::LT => Ok(native_bool_to_boolean_object(l < r)),
@@ -109,16 +133,16 @@ fn eval_infix_expression(operator: InfixOperator, left: Object, right: Object) -
             match operator {
                 InfixOperator::EQ => Ok(native_bool_to_boolean_object(left == right)),
                 InfixOperator::NOT_EQ => Ok(native_bool_to_boolean_object(left != right)),
-                other => Err(format!(
+                other => Err(Error(format!(
                     "unknown operator: {} {} {}",
                     left, other, right
-                )),
+                ))),
             }
-        },
-        (left, right) => Err(format!(
+        }
+        (left, right) => Err(Error(format!(
             "type mismatch: {} {} {}",
             left, operator, right
-        ))
+        ))),
     }
 }
 
@@ -126,7 +150,7 @@ fn eval_bang_operator_expression(right: Object) -> EvalResult {
     match right {
         Object::Boolean(true) => Ok(FALSE),
         Object::Boolean(false) => Ok(TRUE),
-        other => Err(format!("unknown operator: !{}", other)),
+        other => Err(Error(format!("unknown operator: !{}", other))),
     }
 }
 
@@ -140,7 +164,7 @@ fn native_bool_to_boolean_object(input: bool) -> Object {
 fn eval_minus_operator_expression(right: Object) -> EvalResult {
     match right {
         Object::Num(int) => Ok(Object::Num(-int)),
-        other => Err(format!("unknown operator: -{}", other)),
+        other => Err(Error(format!("unknown operator: -{}", other))),
     }
 }
 
@@ -309,22 +333,16 @@ fn test_error_handling() {
             "if (16) { true + false; }",
             "type mismatch: expected bool, but got 16",
         ),
-        Test(
-            "1 / 0",
-            "division by 0: 1/0",
-        ),
-        Test(
-            "1. / 0.",
-            "division by 0: 1/0",
-        ),
+        Test("1 / 0", "division by 0: 1/0"),
+        Test("1. / 0.", "division by 0: 1/0"),
     ];
 
     for Test(input, error_msg) in tests {
         let evaluated = test_eval(input);
 
         match evaluated {
-            Ok(_) => panic!("error was not returned"),
-            Err(err) => assert_eq!(err, error_msg),
+            Err(Error(error)) => assert_eq!(error, error_msg),
+            other => panic!("expected an error but got {:?}", other),
         }
     }
 }
@@ -333,10 +351,10 @@ fn test_eval(input: &str) -> EvalResult {
     let lexer = Lexer::new(input);
     let parser = Parser::new(lexer);
     let program = parser.parse_program().map_err(|e| {
-        e.iter()
+        Error(e.iter()
             .map(|e| e.to_string())
             .collect::<Vec<String>>()
-            .join(", ")
+            .join(", "))
     })?;
 
     eval(Prog(program))
