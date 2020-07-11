@@ -53,7 +53,7 @@ fn eval_expression(expression: Expression) -> EvalResult {
 
 fn eval_prefix_expression(operator: PrefixOperator, right: Object) -> EvalResult {
     match operator {
-        PrefixOperator::BANG => Ok(eval_bang_operator_expression(right)),
+        PrefixOperator::BANG => eval_bang_operator_expression(right),
         PrefixOperator::MINUS => eval_minus_operator_expression(right),
     }
 }
@@ -78,12 +78,11 @@ fn eval_infix_expression(operator: InfixOperator, left: Object, right: Object) -
     }
 }
 
-fn eval_bang_operator_expression(right: Object) -> Object {
+fn eval_bang_operator_expression(right: Object) -> EvalResult {
     match right {
-        TRUE => FALSE,
-        FALSE => TRUE,
-        Object::Null => TRUE,
-        _ => FALSE,
+        TRUE => Ok(FALSE),
+        FALSE => Ok(TRUE),
+        other => Err(format!("can't use ! operator with {}", other)),
     }
 }
 
@@ -168,10 +167,8 @@ fn test_bang_operator() {
     let tests = vec![
         Test("!true", false),
         Test("!false", true),
-        Test("!5", false),
         Test("!!true", true),
         Test("!!false", false),
-        Test("!!5", true),
     ];
 
     for Test(input, expected) in tests {
