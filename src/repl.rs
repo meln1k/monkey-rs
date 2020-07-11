@@ -23,7 +23,11 @@ pub fn start() {
                         Ok(obj) => println!("{}", obj),
                         Err(err) => println!("evaluation error {}", err),
                     },
-                    Err(err) => println!("Parsing error: {}", err.join(", ")),
+                    Err(errs) => {
+                        for err in errs {
+                            println!("{}", err)
+                        }
+                    }
                 };
             }
             Err(err) => {

@@ -1,6 +1,6 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Div, Mul, Sub, Neg};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Object {
@@ -73,7 +73,7 @@ impl Neg for Numeric {
     fn neg(self) -> Self::Output {
         match self {
             Numeric::Float(n) => Numeric::Float(-n),
-            Numeric::Integer(n) => Numeric::Integer(-n)
+            Numeric::Integer(n) => Numeric::Integer(-n),
         }
     }
 }
@@ -81,7 +81,6 @@ impl Neg for Numeric {
 pub const TRUE: Object = Object::Boolean(true);
 pub const FALSE: Object = Object::Boolean(false);
 
-use crate::object::Numeric::Float;
 use crate::object::Object::*;
 
 impl Display for Object {

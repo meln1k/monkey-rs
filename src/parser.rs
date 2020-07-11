@@ -4,10 +4,17 @@ use crate::ast::{
     Program, ReturnStatement, Statement,
 };
 use crate::lexer::lexer::Lexer;
-use crate::lexer::token::Token;
+use crate::lexer::token::{Token, TokenType};
 use crate::parser::Precedence::{LOWEST, PREFIX};
+use core::fmt;
+use std::fmt::{Display, Formatter};
 
-type ParsingError = String;
+#[derive(Debug)]
+pub struct ParsingError {
+    message: String,
+    line: i32,
+    positon: i32,
+}
 type ParsingErrors = Vec<ParsingError>;
 type ParsingResult<T> = Result<T, ParsingError>;
 
@@ -43,11 +50,19 @@ impl<'a> Parser<'a> {
         self.cur_token = std::mem::replace(&mut self.peek_token, self.lexer.next_token());
     }
 
+    fn error<T>(&self, message: String) -> ParsingResult<T> {
+        Err(ParsingError {
+            message,
+            line: self.cur_token.line,
+            positon: self.cur_token.position,
+        })
+    }
+
     pub fn parse_program(mut self) -> Result<Program, ParsingErrors> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
-        while self.cur_token != Token::EOF {
+        while self.cur_token.token_type != TokenType::EOF {
             match self.parse_statement() {
                 Ok(s) => statements.push(s),
                 Err(reason) => errors.push(reason),
@@ -63,9 +78,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> ParsingResult<Statement> {
-        match self.cur_token {
-            Token::LET => self.parse_let_statement().map(|s| Statement::Let(s)),
-            Token::RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
+        match self.cur_token.token_type {
+            TokenType::LET => self.parse_let_statement().map(|s| Statement::Let(s)),
+            TokenType::RETURN => self.parse_return_statement().map(|s| Statement::Return(s)),
             _ => self.parse_expr_statement().map(|s| Statement::Expr(s)),
         }
     }
@@ -73,13 +88,13 @@ impl<'a> Parser<'a> {
     fn parse_let_statement(&mut self) -> ParsingResult<LetStatement> {
         let name = self.expect_ident()?;
 
-        self.expect_peek(Token::ASSIGN)?;
+        self.expect_peek(TokenType::ASSIGN)?;
 
         self.advance_token();
 
         let value = self.parse_expression(LOWEST)?;
 
-        if self.peek_token_is(&Token::SEMICOLON) {
+        if self.peek_token_is(&TokenType::SEMICOLON) {
             self.advance_token();
         }
 
@@ -91,7 +106,7 @@ impl<'a> Parser<'a> {
 
         let return_value = self.parse_expression(LOWEST)?;
 
-        if self.peek_token_is(&Token::SEMICOLON) {
+        if self.peek_token_is(&TokenType::SEMICOLON) {
             self.advance_token();
         }
 
@@ -101,7 +116,7 @@ impl<'a> Parser<'a> {
     fn parse_expr_statement(&mut self) -> ParsingResult<ExpressionStatement> {
         let maybe_expr = self.parse_expression(LOWEST);
 
-        if self.peek_token_is(&Token::SEMICOLON) {
+        if self.peek_token_is(&TokenType::SEMICOLON) {
             self.advance_token()
         }
 
@@ -109,36 +124,37 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> ParsingResult<Expression> {
-        let mut left_expr = match self.cur_token {
-            Token::IDENT(_) => Parser::parse_identifier(self),
-            Token::INT(_) => Parser::parse_integer_literal(self),
-            Token::FLOAT(_) => Parser::parse_float_literal(self),
-            Token::BANG | Token::MINUS => Parser::parse_prefix_expression(self),
-            Token::TRUE | Token::FALSE => Parser::parse_boolean(self),
-            Token::LPAREN => Parser::parse_grouped_expression(self),
-            Token::IF => Parser::parse_if_expression(self),
-            Token::FUNCTION => Parser::parse_function_literal(self),
-            _ => Err(format!(
+        let mut left_expr = match self.cur_token.token_type {
+            TokenType::IDENT(_) => Parser::parse_identifier(self),
+            TokenType::INT(_) => Parser::parse_integer_literal(self),
+            TokenType::FLOAT(_) => Parser::parse_float_literal(self),
+            TokenType::BANG | TokenType::MINUS => Parser::parse_prefix_expression(self),
+            TokenType::TRUE | TokenType::FALSE => Parser::parse_boolean(self),
+            TokenType::LPAREN => Parser::parse_grouped_expression(self),
+            TokenType::IF => Parser::parse_if_expression(self),
+            TokenType::FUNCTION => Parser::parse_function_literal(self),
+            _ => self.error(format!(
                 "no prefix parse function for {:?} found",
                 self.cur_token
             )),
         }?;
 
-        while !self.current_token_is(Token::SEMICOLON) && precedence < precedences(&self.peek_token)
+        while !self.current_token_is(TokenType::SEMICOLON)
+            && precedence < precedences(&self.peek_token)
         {
-            match &self.peek_token {
-                Token::PLUS
-                | Token::MINUS
-                | Token::SLASH
-                | Token::ASTERISK
-                | Token::EQ
-                | Token::NOT_EQ
-                | Token::LT
-                | Token::GT => {
+            match &self.peek_token.token_type {
+                TokenType::PLUS
+                | TokenType::MINUS
+                | TokenType::SLASH
+                | TokenType::ASTERISK
+                | TokenType::EQ
+                | TokenType::NOT_EQ
+                | TokenType::LT
+                | TokenType::GT => {
                     self.advance_token();
                     left_expr = self.parse_infix_expression(left_expr)?;
                 }
-                Token::LPAREN => {
+                TokenType::LPAREN => {
                     self.advance_token();
                     left_expr = self.parse_call_expression(left_expr)?;
                 }
@@ -150,37 +166,37 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_identifier(&mut self) -> ParsingResult<Expression> {
-        match &self.cur_token {
-            Token::IDENT(name) => Ok(Expression::Identifier(name.clone())),
-            other => Err(format!("expected identifier but got {:?}", other)),
+        match &self.cur_token.token_type {
+            TokenType::IDENT(name) => Ok(Expression::Identifier(name.clone())),
+            other => self.error(format!("expected identifier but got {:?}", other)),
         }
     }
 
     fn parse_boolean(&mut self) -> ParsingResult<Expression> {
-        match &self.cur_token {
-            Token::TRUE => Ok(Expression::Boolean(true)),
-            Token::FALSE => Ok(Expression::Boolean(false)),
-            other => Err(format!("expected boolean but got {:?}", other)),
+        match &self.cur_token.token_type {
+            TokenType::TRUE => Ok(Expression::Boolean(true)),
+            TokenType::FALSE => Ok(Expression::Boolean(false)),
+            other => self.error(format!("expected boolean but got {:?}", other)),
         }
     }
 
     fn parse_integer_literal(&mut self) -> ParsingResult<Expression> {
-        match &self.cur_token {
-            Token::INT(value) => value
-                .parse()
-                .map_err(|_| format!("can't parse value {:?} as int", value))
-                .map(Expression::IntegerLiteral),
-            other => Err(format!("Expected INT but got {:?}", other)),
+        match &self.cur_token.token_type {
+            TokenType::INT(value) => match value.parse() {
+                Ok(int) => Ok(Expression::IntegerLiteral(int)),
+                Err(err) => self.error(format!("can't parse value {:?} as int: {}", value, err)),
+            },
+            other => self.error(format!("Expected INT but got {:?}", other)),
         }
     }
 
     fn parse_float_literal(&mut self) -> ParsingResult<Expression> {
-        match &self.cur_token {
-            Token::FLOAT(value) => value
-                .parse()
-                .map_err(|_| format!("can't parse value {:?} as float", value))
-                .map(Expression::FloatLiteral),
-            other => Err(format!("Expected FLOAT but got {:?}", other)),
+        match &self.cur_token.token_type {
+            TokenType::FLOAT(value) => match value.parse() {
+                Ok(int) => Ok(Expression::FloatLiteral(int)),
+                Err(err) => self.error(format!("can't parse value {:?} as float: {}", value, err)),
+            },
+            other => self.error(format!("Expected FLOAT but got {:?}", other)),
         }
     }
 
@@ -189,16 +205,16 @@ impl<'a> Parser<'a> {
 
         let expr = self.parse_expression(LOWEST)?;
 
-        self.expect_peek(Token::RPAREN)?;
+        self.expect_peek(TokenType::RPAREN)?;
 
         Ok(expr)
     }
 
     fn parse_prefix_expression(&mut self) -> ParsingResult<Expression> {
-        let operator = match &self.cur_token {
-            Token::BANG => Ok(PrefixOperator::BANG),
-            Token::MINUS => Ok(PrefixOperator::MINUS),
-            other => Err(format!("Expected prefix token but got {:?}", other)),
+        let operator = match &self.cur_token.token_type {
+            TokenType::BANG => Ok(PrefixOperator::BANG),
+            TokenType::MINUS => Ok(PrefixOperator::MINUS),
+            other => self.error(format!("Expected prefix token but got {:?}", other)),
         }?;
 
         self.advance_token();
@@ -211,16 +227,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_expression(&mut self) -> ParsingResult<Expression> {
-        self.expect_peek(Token::LPAREN)?;
+        self.expect_peek(TokenType::LPAREN)?;
         self.advance_token();
         let condition = Box::new(self.parse_expression(LOWEST)?);
-        self.expect_peek(Token::RPAREN)?;
-        self.expect_peek(Token::LBRACE)?;
+        self.expect_peek(TokenType::RPAREN)?;
+        self.expect_peek(TokenType::LBRACE)?;
         let consequence = Box::new(self.parse_block_statement()?);
 
-        let alternative = if self.peek_token_is(&Token::ELSE) {
+        let alternative = if self.peek_token_is(&TokenType::ELSE) {
             self.advance_token();
-            self.expect_peek(Token::LBRACE)?;
+            self.expect_peek(TokenType::LBRACE)?;
             Some(Box::new(self.parse_block_statement()?))
         } else {
             None
@@ -237,7 +253,7 @@ impl<'a> Parser<'a> {
         self.advance_token();
         let mut statements: Vec<Statement> = Vec::new();
 
-        while !self.current_token_is(Token::RBRACE) && !self.current_token_is(Token::EOF) {
+        while !self.current_token_is(TokenType::RBRACE) && !self.current_token_is(TokenType::EOF) {
             let statement = self.parse_statement()?;
             statements.push(statement);
             self.advance_token();
@@ -246,11 +262,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_literal(&mut self) -> ParsingResult<Expression> {
-        self.expect_peek(Token::LPAREN)?;
+        self.expect_peek(TokenType::LPAREN)?;
 
         let parameters = self.parse_function_parameters()?;
 
-        self.expect_peek(Token::LBRACE)?;
+        self.expect_peek(TokenType::LBRACE)?;
 
         let body = self.parse_block_statement()?;
 
@@ -260,48 +276,48 @@ impl<'a> Parser<'a> {
     fn parse_function_parameters(&mut self) -> ParsingResult<Vec<String>> {
         let mut identifiers: Vec<String> = Vec::new();
 
-        if self.peek_token_is(&Token::RPAREN) {
+        if self.peek_token_is(&TokenType::RPAREN) {
             self.advance_token();
             return Ok(identifiers);
         }
 
         self.advance_token();
 
-        let ident = match &self.cur_token {
-            Token::IDENT(value) => Ok(value.clone()),
-            other => Err(format!("expected identifier but got {:?}", other)),
+        let ident = match &self.cur_token.token_type {
+            TokenType::IDENT(value) => Ok(value.clone()),
+            other => self.error(format!("expected identifier but got {:?}", other)),
         }?;
 
         identifiers.push(ident);
 
-        while self.peek_token_is(&Token::COMMA) {
+        while self.peek_token_is(&TokenType::COMMA) {
             self.advance_token();
             self.advance_token();
 
-            let ident = match &self.cur_token {
-                Token::IDENT(value) => Ok(value.clone()),
-                other => Err(format!("expected identifier but got {:?}", other)),
+            let ident = match &self.cur_token.token_type {
+                TokenType::IDENT(value) => Ok(value.clone()),
+                other => self.error(format!("expected identifier but got {:?}", other)),
             }?;
 
             identifiers.push(ident);
         }
 
-        self.expect_peek(Token::RPAREN)?;
+        self.expect_peek(TokenType::RPAREN)?;
 
         Ok(identifiers)
     }
 
     fn parse_infix_expression(&mut self, left: Expression) -> ParsingResult<Expression> {
-        let operator = match &self.cur_token {
-            Token::PLUS => Ok(InfixOperator::PLUS),
-            Token::MINUS => Ok(InfixOperator::MINUS),
-            Token::SLASH => Ok(InfixOperator::SLASH),
-            Token::ASTERISK => Ok(InfixOperator::ASTERISK),
-            Token::EQ => Ok(InfixOperator::EQ),
-            Token::NOT_EQ => Ok(InfixOperator::NOT_EQ),
-            Token::LT => Ok(InfixOperator::LT),
-            Token::GT => Ok(InfixOperator::GT),
-            other => Err(format!("Expected infix operator but got {:?}", other)),
+        let operator = match &self.cur_token.token_type {
+            TokenType::PLUS => Ok(InfixOperator::PLUS),
+            TokenType::MINUS => Ok(InfixOperator::MINUS),
+            TokenType::SLASH => Ok(InfixOperator::SLASH),
+            TokenType::ASTERISK => Ok(InfixOperator::ASTERISK),
+            TokenType::EQ => Ok(InfixOperator::EQ),
+            TokenType::NOT_EQ => Ok(InfixOperator::NOT_EQ),
+            TokenType::LT => Ok(InfixOperator::LT),
+            TokenType::GT => Ok(InfixOperator::GT),
+            other => self.error(format!("Expected infix operator but got {:?}", other)),
         }?;
 
         let precedence = precedences(&self.cur_token);
@@ -326,7 +342,7 @@ impl<'a> Parser<'a> {
 
     fn parse_call_arguments(&mut self) -> ParsingResult<Vec<Expression>> {
         let mut arguments = Vec::new();
-        if self.peek_token_is(&Token::RPAREN) {
+        if self.peek_token_is(&TokenType::RPAREN) {
             self.advance_token();
             return Ok(arguments);
         }
@@ -334,29 +350,29 @@ impl<'a> Parser<'a> {
         self.advance_token();
         arguments.push(self.parse_expression(LOWEST)?);
 
-        while self.peek_token_is(&Token::COMMA) {
+        while self.peek_token_is(&TokenType::COMMA) {
             self.advance_token();
             self.advance_token();
             arguments.push(self.parse_expression(LOWEST)?);
         }
 
-        self.expect_peek(Token::RPAREN)?;
+        self.expect_peek(TokenType::RPAREN)?;
 
         Ok(arguments)
     }
 
-    fn current_token_is(&self, t: Token) -> bool {
-        self.cur_token == t
+    fn current_token_is(&self, t: TokenType) -> bool {
+        self.cur_token.token_type == t
     }
 
-    fn peek_token_is(&self, t: &Token) -> bool {
-        self.peek_token == *t
+    fn peek_token_is(&self, t: &TokenType) -> bool {
+        self.peek_token.token_type == *t
     }
 
     fn expect_ident(&mut self) -> ParsingResult<String> {
-        let result = match &self.peek_token {
-            Token::IDENT(name) => Ok(name.clone()),
-            other => Err(format!("Expected IDENT but got {:?}", other)),
+        let result = match &self.peek_token.token_type {
+            TokenType::IDENT(name) => Ok(name.clone()),
+            other => self.error(format!("Expected IDENT but got {:?}", other)),
         };
 
         match result {
@@ -367,11 +383,11 @@ impl<'a> Parser<'a> {
         result
     }
 
-    fn expect_peek(&mut self, t: Token) -> ParsingResult<()> {
+    fn expect_peek(&mut self, t: TokenType) -> ParsingResult<()> {
         if self.peek_token_is(&t) {
             Ok(self.advance_token())
         } else {
-            Err(format!(
+            self.error(format!(
                 "Expected next token to be {:?} but got {:?}",
                 t, self.peek_token
             ))
@@ -381,20 +397,25 @@ impl<'a> Parser<'a> {
 
 fn precedences(token: &Token) -> Precedence {
     use crate::parser::Precedence::*;
-    match token {
-        Token::EQ => EQUALS,
-        Token::NOT_EQ => EQUALS,
-        Token::LT => LESSGREATER,
-        Token::GT => LESSGREATER,
-        Token::PLUS => SUM,
-        Token::MINUS => SUM,
-        Token::SLASH => PRODUCT,
-        Token::ASTERISK => PRODUCT,
-        Token::LPAREN => CALL,
+    match token.token_type {
+        TokenType::EQ => EQUALS,
+        TokenType::NOT_EQ => EQUALS,
+        TokenType::LT => LESSGREATER,
+        TokenType::GT => LESSGREATER,
+        TokenType::PLUS => SUM,
+        TokenType::MINUS => SUM,
+        TokenType::SLASH => PRODUCT,
+        TokenType::ASTERISK => PRODUCT,
+        TokenType::LPAREN => CALL,
         _ => LOWEST,
     }
 }
 
+impl Display for ParsingError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}:{}] {}", self.line, self.positon, self.message)
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::ast::Expression::*;

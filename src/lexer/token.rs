@@ -1,6 +1,6 @@
 #[derive(PartialEq, Eq, Debug)]
 #[allow(non_camel_case_types)]
-pub enum Token {
+pub enum TokenType {
     ILLEGAL,
     EOF,
 
@@ -39,8 +39,15 @@ pub enum Token {
     RETURN,
 }
 
-pub fn lookup_ident(keyword: String) -> Token {
-    use crate::lexer::token::Token::*;
+#[derive(Debug)]
+pub struct Token {
+    pub token_type: TokenType,
+    pub line: i32,
+    pub position: i32,
+}
+
+pub fn lookup_ident(keyword: String) -> TokenType {
+    use crate::lexer::token::TokenType::*;
     match keyword.as_str() {
         "fn" => FUNCTION,
         "let" => LET,

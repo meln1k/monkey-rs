@@ -86,12 +86,10 @@ fn eval_infix_expression(operator: InfixOperator, left: Object, right: Object) -
             InfixOperator::PLUS => Ok(Object::Num(l + r)),
             InfixOperator::MINUS => Ok(Object::Num(l - r)),
             InfixOperator::ASTERISK => Ok(Object::Num(l * r)),
-            InfixOperator::SLASH => {
-                match r {
-                    Integer(0) => Err(format!("division by 0: {}/{}", l, r)),
-                    Float(0.0) => Err(format!("division by 0: {}/{}", l, r)),
-                    _ => Ok(Object::Num(l / r))
-                }
+            InfixOperator::SLASH => match r {
+                Integer(0) => Err(format!("division by 0: {}/{}", l, r)),
+                Float(0.0) => Err(format!("division by 0: {}/{}", l, r)),
+                _ => Ok(Object::Num(l / r)),
             },
             InfixOperator::LT => Ok(native_bool_to_boolean_object(l < r)),
             InfixOperator::GT => Ok(native_bool_to_boolean_object(l > r)),
@@ -255,7 +253,12 @@ fn test_if_else_expressions() {
 fn test_eval(input: &str) -> EvalResult {
     let lexer = Lexer::new(input);
     let parser = Parser::new(lexer);
-    let program = parser.parse_program().map_err(|e| e.join(", "))?;
+    let program = parser.parse_program().map_err(|e| {
+        e.iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    })?;
 
     eval(Prog(program))
 }
@@ -263,7 +266,7 @@ fn test_eval(input: &str) -> EvalResult {
 fn test_float_object(obj: Object, expected: f64) {
     match obj {
         Object::Num(n) => match n {
-            Float(i) =>  assert_eq!(i, expected),
+            Float(i) => assert_eq!(i, expected),
             other => panic!("expected Integer but got {:?}", other),
         },
         other => panic!("expected Integer but got {:?}", other),
@@ -273,7 +276,7 @@ fn test_float_object(obj: Object, expected: f64) {
 fn test_integer_object(obj: Object, expected: i64) {
     match obj {
         Object::Num(n) => match n {
-            Integer(i) =>  assert_eq!(i, expected),
+            Integer(i) => assert_eq!(i, expected),
             other => panic!("expected Integer but got {:?}", other),
         },
         other => panic!("expected Integer but got {:?}", other),

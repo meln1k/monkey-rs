@@ -1,77 +1,106 @@
-use crate::lexer::token::Token::*;
-use crate::lexer::token::{lookup_ident, Token};
+use crate::lexer::token::TokenType::*;
+use crate::lexer::token::{lookup_ident, Token, TokenType};
 use std::iter::Peekable;
 use std::str::Chars;
 
 pub struct Lexer<'a> {
-    peekable: Peekable<Chars<'a>>,
+    _peekable: Peekable<Chars<'a>>,
+    pub current_line: i32,
+    pub current_position: i32,
 }
 
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Lexer<'a> {
         Lexer {
-            peekable: input.chars().peekable(),
+            _peekable: input.chars().peekable(),
+            current_line: 1,
+            current_position: 0,
+        }
+    }
+
+    fn next_char(&mut self) -> Option<char> {
+        self.current_position += 1;
+        self._peekable.next()
+    }
+
+    fn peek_char(&mut self) -> Option<&char> {
+        self._peekable.peek()
+    }
+
+    fn token(&mut self, token_type: TokenType) -> Token {
+        self.token_pos(token_type, self.current_position)
+    }
+
+    fn token_pos(&mut self, token_type: TokenType, position: i32) -> Token {
+        Token {
+            token_type,
+            line: self.current_line,
+            position: position,
         }
     }
 
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
-        let peekable = &mut self.peekable;
-
-        match peekable.next() {
+        match self.next_char() {
             Some(char) => match char {
-                ';' => SEMICOLON,
-                '(' => LPAREN,
-                ')' => RPAREN,
-                ',' => COMMA,
-                '+' => PLUS,
-                '{' => LBRACE,
-                '}' => RBRACE,
-                '=' => match peekable.peek() {
+                ';' => self.token(SEMICOLON),
+                '(' => self.token(LPAREN),
+                ')' => self.token(RPAREN),
+                ',' => self.token(COMMA),
+                '+' => self.token(PLUS),
+                '{' => self.token(LBRACE),
+                '}' => self.token(RBRACE),
+                '=' => match self.peek_char() {
                     Some('=') => {
-                        peekable.next();
-                        EQ
+                        let pos = self.current_position;
+                        self.next_char();
+                        self.token_pos(EQ, pos)
                     }
-                    _ => ASSIGN,
+                    _ => self.token(ASSIGN),
                 },
-                '-' => MINUS,
-                '!' => match peekable.peek() {
+                '-' => self.token(MINUS),
+                '!' => match self.peek_char() {
                     Some('=') => {
-                        peekable.next();
-                        NOT_EQ
+                        let pos = self.current_position;
+                        self.next_char();
+                        self.token_pos(NOT_EQ, pos)
                     }
-                    _ => BANG,
+                    _ => self.token(BANG),
                 },
-                '/' => SLASH,
-                '*' => ASTERISK,
-                '<' => LT,
-                '>' => GT,
+                '/' => self.token(SLASH),
+                '*' => self.token(ASTERISK),
+                '<' => self.token(LT),
+                '>' => self.token(GT),
                 c if c.is_alphabetic() || char == '_' => {
+                    let pos = self.current_position;
+
                     let literal = self.read_identifier(c);
-                    lookup_ident(literal)
+                    let token_type = lookup_ident(literal);
+                    self.token_pos(token_type, pos)
                 }
                 d if d.is_ascii_digit() => {
+                    let pos = self.current_position;
                     let (literal, is_float) = self.read_number(d);
                     if is_float {
-                        FLOAT(literal)
+                        self.token_pos(FLOAT(literal), pos)
                     } else {
-                        INT(literal)
+                        self.token_pos(INT(literal), pos)
                     }
                 }
-                _ => ILLEGAL,
+                _ => self.token(ILLEGAL),
             },
-            None => EOF,
+            None => self.token(EOF),
         }
     }
 
     fn read_identifier(&mut self, head: char) -> String {
         let mut literal = String::new();
         literal.push(head);
-        while let Some(&ch) = self.peekable.peek() {
+        while let Some(&ch) = self.peek_char() {
             if ch.is_alphabetic() {
                 literal.push(ch);
-                self.peekable.next();
+                self.next_char();
             } else {
                 break;
             }
@@ -83,16 +112,16 @@ impl<'a> Lexer<'a> {
         let mut literal = String::new();
         let mut fraction_seen = false;
         literal.push(head);
-        while let Some(&ch) = self.peekable.peek() {
+        while let Some(&ch) = self.peek_char() {
             match ch {
                 c if c.is_ascii_digit() => {
                     literal.push(ch);
-                    self.peekable.next();
+                    self.next_char();
                 }
                 '.' if !fraction_seen => {
                     literal.push(ch);
                     fraction_seen = true;
-                    self.peekable.next();
+                    self.next_char();
                 }
                 _ => break,
             }
@@ -101,13 +130,28 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some(&c) = self.peekable.peek() {
-            if c.is_whitespace() {
-                self.peekable.next();
-            } else {
-                break;
+        while let Some(&c) = self.peek_char() {
+            match c {
+                '\r' => {
+                    self.next_char();
+                    match self.peek_char() {
+                        Some('\n') => self.start_newline(),
+                        _ => break,
+                    }
+                }
+                '\n' => self.start_newline(),
+                c if c.is_whitespace() => {
+                    self.next_char();
+                }
+                _ => break,
             }
         }
+    }
+
+    fn start_newline(&mut self) {
+        self.current_line += 1;
+        self.current_position = 0;
+        self._peekable.next();
     }
 }
 
@@ -115,9 +159,10 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.next_token() {
+        let next_token = self.next_token();
+        match &next_token.token_type {
             EOF => None,
-            other => Some(other),
+            other => Some(next_token),
         }
     }
 }
@@ -126,8 +171,8 @@ impl<'a> Iterator for Lexer<'a> {
 mod tests {
 
     use crate::lexer::lexer::Lexer;
-    use crate::lexer::token::Token;
-    use crate::lexer::token::Token::*;
+    use crate::lexer::token::TokenType;
+    use crate::lexer::token::TokenType::*;
 
     #[test]
     fn test_next_token() {
@@ -154,7 +199,7 @@ mod tests {
         ";
 
         #[derive(Debug)]
-        struct TestInput(Token);
+        struct TestInput(TokenType);
 
         let tests = vec![
             TestInput(LET),
@@ -242,7 +287,57 @@ mod tests {
 
         for test in tests.iter() {
             let token = lexer.next_token();
-            assert_eq!(token, test.0, "test input: {:?}", test)
+            assert_eq!(
+                token.token_type, test.0,
+                "test input: {:?}, token: {:?}",
+                test, token
+            )
+        }
+    }
+
+    #[test]
+    fn test_token_position() {
+        let input = "let five = 5;
+let ten = 10;";
+
+        type Line = i32;
+        type Position = i32;
+
+        #[derive(Debug)]
+        struct TestInput(TokenType, Position, Line);
+
+        let tests = vec![
+            TestInput(LET, 1, 1),
+            TestInput(IDENT("five".to_owned()), 1, 5),
+            TestInput(ASSIGN, 1, 10),
+            TestInput(INT("5".to_owned()), 1, 12),
+            TestInput(SEMICOLON, 1, 13),
+            TestInput(LET, 2, 1),
+            TestInput(IDENT("ten".to_owned()), 2, 5),
+            TestInput(ASSIGN, 2, 9),
+            TestInput(INT("10".to_owned()), 2, 11),
+            TestInput(SEMICOLON, 2, 13),
+        ];
+
+        let mut lexer = Lexer::new(input);
+
+        for test in tests.iter() {
+            let token = lexer.next_token();
+            assert_eq!(
+                token.token_type, test.0,
+                "test input: {:?}, token: {:?}",
+                test, token
+            );
+            assert_eq!(
+                token.line, test.1,
+                "test input: {:?}, token: {:?}",
+                test, token
+            );
+            assert_eq!(
+                token.position, test.2,
+                "test input: {:?}, token: {:?}",
+                test, token
+            );
         }
     }
 }
