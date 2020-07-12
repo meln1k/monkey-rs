@@ -2,14 +2,14 @@ use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub enum Object {
     Num(Numeric),
     Boolean(bool),
     Null,
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub enum Numeric {
     Integer(i64),
     Float(f64),

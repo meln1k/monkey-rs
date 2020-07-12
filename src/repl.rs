@@ -1,5 +1,7 @@
 use crate::ast::Node::Prog;
+use crate::environment::Environment;
 use crate::evaluator;
+use crate::evaluator::Evaluator;
 use crate::lexer::lexer::Lexer;
 use crate::parser::Parser;
 use std::io;
@@ -11,6 +13,9 @@ pub fn start() {
 
     let stdin = io::stdin();
 
+    let environment = Environment::new();
+    let mut evaluator = Evaluator::new(environment);
+
     loop {
         println!("{}", PROMT);
 
@@ -18,8 +23,9 @@ pub fn start() {
             Ok(_) => {
                 let lexer = Lexer::new(&buffer);
                 let parser = Parser::new(lexer);
+
                 match parser.parse_program() {
-                    Ok(program) => match evaluator::eval(Prog(program)) {
+                    Ok(program) => match evaluator.eval(Prog(program)) {
                         Ok(obj) => println!("{}", obj),
                         Err(err) => println!("evaluation error {}", err),
                     },
