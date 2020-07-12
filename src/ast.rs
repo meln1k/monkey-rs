@@ -18,7 +18,7 @@ pub enum Statement {
 
 #[derive(PartialEq, Debug)]
 pub enum Expression {
-    Identifier(String),
+    Ident(Identifier),
     IntegerLiteral(i64),
     FloatLiteral(f64),
     PrefixExpression {
@@ -53,7 +53,7 @@ pub struct Program {
 
 #[derive(PartialEq, Debug)]
 pub struct LetStatement {
-    pub name: String,
+    pub name: Identifier,
     pub value: Expression,
 }
 
@@ -71,6 +71,9 @@ pub struct ExpressionStatement {
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
 }
+
+#[derive(PartialEq, Debug, Eq, Hash)]
+pub struct Identifier(pub String);
 
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, Debug)]
@@ -121,7 +124,7 @@ impl Display for Statement {
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Identifier(s) => write!(f, "{}", s),
+            Expression::Ident(Identifier(s)) => write!(f, "{}", s),
             Expression::IntegerLiteral(n) => write!(f, "{}", n),
             Expression::FloatLiteral(n) => write!(f, "{}", n),
             Expression::PrefixExpression { operator, expr } => write!(f, "({}{})", operator, expr),
@@ -197,17 +200,23 @@ impl Display for BlockStatement {
     }
 }
 
+impl Display for Identifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::ast::Expression::Identifier;
-    use crate::ast::{LetStatement, Program, Statement};
+    use crate::ast::Expression::Ident;
+    use crate::ast::{Identifier, LetStatement, Program, Statement};
 
     #[test]
     fn test_to_string() {
         let program = Program {
             statements: vec![Statement::Let(LetStatement {
-                name: "myVar".to_owned(),
-                value: Identifier("anotherVar".to_owned()),
+                name: Identifier("myVar".to_owned()),
+                value: Ident(Identifier("anotherVar".to_owned())),
             })],
         };
 

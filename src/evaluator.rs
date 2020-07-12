@@ -115,7 +115,7 @@ impl Evaluator {
                     ))),
                 }
             }
-            Expression::Identifier(name) => match self.environment.get(&name) {
+            Expression::Ident(name) => match self.environment.get(&name) {
                 Some(&obj) => Ok(obj),
                 None => Err(Error(format!("identifier not found: {}", name))),
             },

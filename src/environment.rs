@@ -1,8 +1,9 @@
+use crate::ast::Identifier;
 use crate::object::Object;
 use std::collections::HashMap;
 
 pub struct Environment {
-    store: HashMap<String, Object>,
+    store: HashMap<Identifier, Object>,
 }
 
 impl Environment {
@@ -12,11 +13,11 @@ impl Environment {
         };
     }
 
-    pub fn get(&self, name: &String) -> Option<&Object> {
+    pub fn get(&self, name: &Identifier) -> Option<&Object> {
         self.store.get(name)
     }
 
-    pub fn set(&mut self, name: String, value: Object) -> Object {
+    pub fn set(&mut self, name: Identifier, value: Object) -> Object {
         self.store.insert(name, value);
         value
     }

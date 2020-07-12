@@ -1,7 +1,7 @@
 use crate::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
 use crate::ast::{
-    BlockStatement, Expression, ExpressionStatement, InfixOperator, LetStatement, PrefixOperator,
-    Program, ReturnStatement, Statement,
+    BlockStatement, Expression, ExpressionStatement, Identifier, InfixOperator, LetStatement,
+    PrefixOperator, Program, ReturnStatement, Statement,
 };
 use crate::lexer::lexer::Lexer;
 use crate::lexer::token::{Token, TokenType};
@@ -167,7 +167,7 @@ impl<'a> Parser<'a> {
 
     fn parse_identifier(&mut self) -> ParsingResult<Expression> {
         match &self.cur_token.token_type {
-            TokenType::IDENT(name) => Ok(Expression::Identifier(name.clone())),
+            TokenType::IDENT(name) => Ok(Expression::Ident(Identifier(name.clone()))),
             other => self.error(format!("expected identifier but got {:?}", other)),
         }
     }
@@ -369,18 +369,15 @@ impl<'a> Parser<'a> {
         self.peek_token.token_type == *t
     }
 
-    fn expect_ident(&mut self) -> ParsingResult<String> {
+    fn expect_ident(&mut self) -> ParsingResult<Identifier> {
         let result = match &self.peek_token.token_type {
-            TokenType::IDENT(name) => Ok(name.clone()),
+            TokenType::IDENT(name) => Ok(Identifier(name.clone())),
             other => self.error(format!("Expected IDENT but got {:?}", other)),
-        };
+        }?;
 
-        match result {
-            Ok(_) => self.advance_token(),
-            _ => (),
-        }
+        self.advance_token();
 
-        result
+        Ok(result)
     }
 
     fn expect_peek(&mut self, t: TokenType) -> ParsingResult<()> {
@@ -421,7 +418,7 @@ mod tests {
     use crate::ast::Expression::*;
     use crate::ast::InfixOperator::LT;
     use crate::ast::{
-        Expression, ExpressionStatement, InfixOperator, LetStatement, PrefixOperator,
+        Expression, ExpressionStatement, Identifier, InfixOperator, LetStatement, PrefixOperator,
         ReturnStatement, Statement,
     };
     use crate::lexer::lexer::Lexer;
@@ -430,14 +427,18 @@ mod tests {
 
     #[test]
     fn test_let_statements() {
-        struct Test(String, String, ExpectedExprValue);
+        struct Test(String, Identifier, ExpectedExprValue);
 
         let tests = vec![
-            Test("let x = 5;".to_owned(), "x".to_owned(), Int(5)),
-            Test("let y = true;".to_owned(), "y".to_owned(), Bool(true)),
+            Test("let x = 5;".to_owned(), Identifier("x".to_owned()), Int(5)),
+            Test(
+                "let y = true;".to_owned(),
+                Identifier("y".to_owned()),
+                Bool(true),
+            ),
             Test(
                 "let foobar = y;".to_owned(),
-                "foobar".to_owned(),
+                Identifier("foobar".to_owned()),
                 Str("y".to_owned()),
             ),
         ];
@@ -458,7 +459,7 @@ mod tests {
 
             let statement = &statements[0];
 
-            test_let_statement(statement, &expected_identifier);
+            test_let_statement(statement, expected_identifier);
 
             match statement {
                 Statement::Let(LetStatement { name: _, value }) => {
@@ -469,7 +470,7 @@ mod tests {
         }
     }
 
-    fn test_let_statement(statement: &Statement, name: &str) {
+    fn test_let_statement(statement: &Statement, name: Identifier) {
         match statement {
             Statement::Let(s) => assert_eq!(s.name, name),
             other => panic!("Expected Let but got {:?}", other),
@@ -528,7 +529,7 @@ mod tests {
 
         match statement {
             Statement::Expr(ExpressionStatement { expression }) => {
-                assert_eq!(expression, &Identifier("foobar".to_owned()))
+                assert_eq!(expression, &Ident(Identifier("foobar".to_owned())))
             }
             other => panic!("expected an identifier but got {:?}", other),
         }
@@ -637,7 +638,7 @@ mod tests {
 
     fn test_identifier(expression: &Expression, value: String) {
         match expression {
-            Expression::Identifier(s) => assert_eq!(*s, value),
+            Expression::Ident(s) => assert_eq!(*s, Identifier(value)),
             other => panic!("expected Identifier but got {:?}", other),
         }
     }
@@ -961,8 +962,8 @@ mod tests {
                                 operator,
                                 right,
                             } => {
-                                assert_eq!(**left, Expression::Identifier("x".to_owned()));
-                                assert_eq!(**right, Expression::Identifier("y".to_owned()));
+                                assert_eq!(**left, Expression::Ident(Identifier("x".to_owned())));
+                                assert_eq!(**right, Expression::Ident(Identifier("y".to_owned())));
                                 assert_eq!(*operator, InfixOperator::PLUS)
                             }
                             other => panic!("expected InfixExpression but got {:?}", other),
@@ -1035,7 +1036,7 @@ mod tests {
                     function,
                     arguments,
                 } => {
-                    assert_eq!(**function, Identifier("add".to_owned()));
+                    assert_eq!(**function, Ident(Identifier("add".to_owned())));
                     assert_eq!(arguments.len(), 3);
                     test_literal_expression(&arguments[0], Int(1));
                     test_infix_expression(&arguments[1], Int(2), InfixOperator::ASTERISK, Int(3));
