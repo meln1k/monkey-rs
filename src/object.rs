@@ -2,8 +2,8 @@ use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
-#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
-pub enum Object {
+#[derive(Debug, PartialEq)]
+pub enum Value {
     Num(Numeric),
     Boolean(bool),
     Null,
@@ -78,12 +78,15 @@ impl Neg for Numeric {
     }
 }
 
-pub const TRUE: Object = Object::Boolean(true);
-pub const FALSE: Object = Object::Boolean(false);
+pub const TRUE: Value = Value::Boolean(true);
+pub const FALSE: Value = Value::Boolean(false);
 
-use crate::object::Object::*;
+use crate::ast::{BlockStatement, Identifier};
+use crate::environment::Environment;
+use crate::object::Value::*;
+use std::rc::Rc;
 
-impl Display for Object {
+impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Num(n) => write!(f, "{}", n),

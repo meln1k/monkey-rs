@@ -5,14 +5,15 @@ use crate::environment::Environment;
 use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
 use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
-use crate::object::{Object, FALSE, TRUE};
+use crate::object::{Value, FALSE, TRUE};
 use crate::parser::Parser;
 use core::fmt;
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum EvalError {
-    NonLocalReturnControl(Object),
+    NonLocalReturnControl(Rc<Value>),
     Error(String),
 }
 
@@ -25,7 +26,7 @@ impl Display for EvalError {
     }
 }
 
-type EvalResult = Result<Object, EvalError>;
+type EvalResult = Result<Rc<Value>, EvalError>;
 
 pub struct Evaluator {
     environment: Environment,
@@ -44,7 +45,7 @@ impl Evaluator {
     }
 
     fn eval_statements(&mut self, statements: Vec<Statement>) -> EvalResult {
-        let mut obj: Option<Object> = None;
+        let mut obj: Option<Rc<Value>> = None;
 
         for statement in statements {
             match self.eval_statement(statement) {
@@ -61,7 +62,7 @@ impl Evaluator {
             }
         }
 
-        Ok(obj.unwrap_or(Object::Null))
+        Ok(obj.unwrap_or(Rc::new(Value::Null)))
     }
 
     fn eval_statement(&mut self, statement: Statement) -> EvalResult {
@@ -81,8 +82,8 @@ impl Evaluator {
 
     fn eval_expression(&mut self, expression: Expression) -> EvalResult {
         match expression {
-            Expression::IntegerLiteral(int) => Ok(Object::Num(Integer(int))),
-            Expression::FloatLiteral(float) => Ok(Object::Num(Float(float))),
+            Expression::IntegerLiteral(int) => Ok(Rc::new(Value::Num(Integer(int)))),
+            Expression::FloatLiteral(float) => Ok(Rc::new(Value::Num(Float(float)))),
             Expression::Boolean(value) => Ok(self.native_bool_to_boolean_object(value)),
             Expression::PrefixExpression { operator, expr } => {
                 let right = self.eval_expression(*expr)?;
@@ -102,12 +103,12 @@ impl Evaluator {
                 consequence,
                 alternative,
             } => {
-                let cond = self.eval_expression(*condition)?;
+                let cond = &*self.eval_expression(*condition)?;
                 match cond {
-                    Object::Boolean(true) => self.eval_statement(Block(*consequence)),
-                    Object::Boolean(false) => match alternative {
+                    Value::Boolean(true) => self.eval_statement(Block(*consequence)),
+                    Value::Boolean(false) => match alternative {
                         Some(block) => self.eval_statement(Block(*block)),
-                        None => Ok(Object::Null),
+                        None => Ok(Rc::new(Value::Null)),
                     },
                     other => Err(Error(format!(
                         "type mismatch: expected bool, but got {}",
@@ -116,14 +117,14 @@ impl Evaluator {
                 }
             }
             Expression::Ident(name) => match self.environment.get(&name) {
-                Some(&obj) => Ok(obj),
+                Some(obj) => Ok(obj),
                 None => Err(Error(format!("identifier not found: {}", name))),
             },
             _ => todo!(),
         }
     }
 
-    fn eval_prefix_expression(&self, operator: PrefixOperator, right: Object) -> EvalResult {
+    fn eval_prefix_expression(&self, operator: PrefixOperator, right: Rc<Value>) -> EvalResult {
         match operator {
             PrefixOperator::BANG => self.eval_bang_operator_expression(right),
             PrefixOperator::MINUS => self.eval_minus_operator_expression(right),
@@ -133,25 +134,25 @@ impl Evaluator {
     fn eval_infix_expression(
         &self,
         operator: InfixOperator,
-        left: Object,
-        right: Object,
+        left: Rc<Value>,
+        right: Rc<Value>,
     ) -> EvalResult {
-        match (left, right) {
-            (Object::Num(l), Object::Num(r)) => match operator {
-                InfixOperator::PLUS => Ok(Object::Num(l + r)),
-                InfixOperator::MINUS => Ok(Object::Num(l - r)),
-                InfixOperator::ASTERISK => Ok(Object::Num(l * r)),
+        match (&*left, &*right) {
+            (&Value::Num(l), &Value::Num(r)) => match operator {
+                InfixOperator::PLUS => Ok(Rc::new(Value::Num(l + r))),
+                InfixOperator::MINUS => Ok(Rc::new(Value::Num(l - r))),
+                InfixOperator::ASTERISK => Ok(Rc::new(Value::Num(l * r))),
                 InfixOperator::SLASH => match r {
                     Integer(0) => Err(Error(format!("division by 0: {}/{}", l, r))),
                     Float(0.0) => Err(Error(format!("division by 0: {}/{}", l, r))),
-                    _ => Ok(Object::Num(l / r)),
+                    _ => Ok(Rc::new(Value::Num(l / r))),
                 },
                 InfixOperator::LT => Ok(self.native_bool_to_boolean_object(l < r)),
                 InfixOperator::GT => Ok(self.native_bool_to_boolean_object(l > r)),
                 InfixOperator::EQ => Ok(self.native_bool_to_boolean_object(l == r)),
                 InfixOperator::NOT_EQ => Ok(self.native_bool_to_boolean_object(l != r)),
             },
-            (left, right) if std::mem::discriminant(&left) == std::mem::discriminant(&right) => {
+            (left, right) if std::mem::discriminant(left) == std::mem::discriminant(right) => {
                 match operator {
                     InfixOperator::EQ => Ok(self.native_bool_to_boolean_object(left == right)),
                     InfixOperator::NOT_EQ => Ok(self.native_bool_to_boolean_object(left != right)),
@@ -168,24 +169,25 @@ impl Evaluator {
         }
     }
 
-    fn eval_bang_operator_expression(&self, right: Object) -> EvalResult {
-        match right {
-            Object::Boolean(true) => Ok(FALSE),
-            Object::Boolean(false) => Ok(TRUE),
+    fn eval_bang_operator_expression(&self, right: Rc<Value>) -> EvalResult {
+        match &*right {
+            Value::Boolean(true) => Ok(Rc::new(FALSE)),
+            Value::Boolean(false) => Ok(Rc::new(TRUE)),
             other => Err(Error(format!("unknown operator: !{}", other))),
         }
     }
 
-    fn native_bool_to_boolean_object(&self, input: bool) -> Object {
-        match input {
+    fn native_bool_to_boolean_object(&self, input: bool) -> Rc<Value> {
+        let result = match input {
             true => TRUE,
             false => FALSE,
-        }
+        };
+        Rc::new(result)
     }
 
-    fn eval_minus_operator_expression(&self, right: Object) -> EvalResult {
-        match right {
-            Object::Num(int) => Ok(Object::Num(-int)),
+    fn eval_minus_operator_expression(&self, right: Rc<Value>) -> EvalResult {
+        match &*right {
+            &Value::Num(num) => Ok(Rc::new(Value::Num(-num))),
             other => Err(Error(format!("unknown operator: -{}", other))),
         }
     }
@@ -307,7 +309,7 @@ fn test_if_else_expressions() {
 
         match expected {
             Some(int) => test_integer_object(evaluated, int),
-            None => assert_eq!(evaluated, Object::Null),
+            None => assert_eq!(&*evaluated, &Value::Null),
         }
     }
 }
@@ -383,7 +385,7 @@ fn test_let_statements() {
     ];
 
     for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
+        let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
         test_integer_object(evaluated, expected)
     }
 }
@@ -405,9 +407,9 @@ fn test_eval(input: &str) -> EvalResult {
     evaluator.eval(Prog(program))
 }
 
-fn test_float_object(obj: Object, expected: f64) {
-    match obj {
-        Object::Num(n) => match n {
+fn test_float_object(obj: Rc<Value>, expected: f64) {
+    match &*obj {
+        &Value::Num(n) => match n {
             Float(i) => assert_eq!(i, expected),
             other => panic!("expected Integer but got {:?}", other),
         },
@@ -415,9 +417,9 @@ fn test_float_object(obj: Object, expected: f64) {
     }
 }
 
-fn test_integer_object(obj: Object, expected: i64) {
-    match obj {
-        Object::Num(n) => match n {
+fn test_integer_object(obj: Rc<Value>, expected: i64) {
+    match &*obj {
+        &Value::Num(n) => match n {
             Integer(i) => assert_eq!(i, expected),
             other => panic!("expected Integer but got {:?}", other),
         },
@@ -425,9 +427,9 @@ fn test_integer_object(obj: Object, expected: i64) {
     }
 }
 
-fn test_boolean_object(obj: Object, expected: bool) {
-    match obj {
-        Object::Boolean(b) => assert_eq!(b, expected),
+fn test_boolean_object(obj: Rc<Value>, expected: bool) {
+    match &*obj {
+        &Value::Boolean(b) => assert_eq!(b, expected),
         other => panic!("expected Integer but got {:?}", other),
     }
 }

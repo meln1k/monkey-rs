@@ -273,8 +273,8 @@ impl<'a> Parser<'a> {
         Ok(FunctionLiteral { parameters, body })
     }
 
-    fn parse_function_parameters(&mut self) -> ParsingResult<Vec<String>> {
-        let mut identifiers: Vec<String> = Vec::new();
+    fn parse_function_parameters(&mut self) -> ParsingResult<Vec<Identifier>> {
+        let mut identifiers: Vec<Identifier> = Vec::new();
 
         if self.peek_token_is(&TokenType::RPAREN) {
             self.advance_token();
@@ -284,7 +284,7 @@ impl<'a> Parser<'a> {
         self.advance_token();
 
         let ident = match &self.cur_token.token_type {
-            TokenType::IDENT(value) => Ok(value.clone()),
+            TokenType::IDENT(value) => Ok(Identifier(value.clone())),
             other => self.error(format!("expected identifier but got {:?}", other)),
         }?;
 
@@ -295,7 +295,7 @@ impl<'a> Parser<'a> {
             self.advance_token();
 
             let ident = match &self.cur_token.token_type {
-                TokenType::IDENT(value) => Ok(value.clone()),
+                TokenType::IDENT(value) => Ok(Identifier(value.clone())),
                 other => self.error(format!("expected identifier but got {:?}", other)),
             }?;
 
@@ -952,8 +952,8 @@ mod tests {
             Statement::Expr(ExpressionStatement { expression }) => match expression {
                 Expression::FunctionLiteral { parameters, body } => {
                     assert_eq!(parameters.len(), 2);
-                    assert_eq!(parameters[0], "x".to_owned());
-                    assert_eq!(parameters[1], "y".to_owned());
+                    assert_eq!(parameters[0].0, "x".to_owned());
+                    assert_eq!(parameters[1].0, "y".to_owned());
                     assert_eq!(body.statements.len(), 1);
                     match &body.statements[0] {
                         Statement::Expr(ExpressionStatement { expression }) => match expression {

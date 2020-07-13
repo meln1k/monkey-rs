@@ -37,7 +37,7 @@ pub enum Expression {
         alternative: Option<Box<BlockStatement>>,
     },
     FunctionLiteral {
-        parameters: Vec<String>,
+        parameters: Vec<Identifier>,
         body: BlockStatement,
     },
     CallExpression {
@@ -110,7 +110,7 @@ impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Statement::Let(LetStatement { name, value }) => {
-                write!(f, "let {} = {};", name, value.to_string())
+                write!(f, "let {} = {};", name.0, value.to_string())
             }
             Statement::Return(ReturnStatement { return_value }) => {
                 write!(f, "return {};", return_value)
@@ -145,9 +145,16 @@ impl Display for Expression {
                     None => Ok(()),
                 }
             }
-            Expression::FunctionLiteral { parameters, body } => {
-                write!(f, "fn({}){}", parameters.join(", "), body.to_string())
-            }
+            Expression::FunctionLiteral { parameters, body } => write!(
+                f,
+                "fn({}){}",
+                parameters
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                body.to_string()
+            ),
             Expression::CallExpression {
                 function,
                 arguments,

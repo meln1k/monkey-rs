@@ -1,9 +1,10 @@
 use crate::ast::Identifier;
-use crate::object::Object;
+use crate::object::Value;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct Environment {
-    store: HashMap<Identifier, Object>,
+    store: HashMap<Identifier, Rc<Value>>,
 }
 
 impl Environment {
@@ -13,12 +14,13 @@ impl Environment {
         };
     }
 
-    pub fn get(&self, name: &Identifier) -> Option<&Object> {
-        self.store.get(name)
+    pub fn get(&self, name: &Identifier) -> Option<Rc<Value>> {
+        self.store.get(name).map(|v| Rc::clone(v))
     }
 
-    pub fn set(&mut self, name: Identifier, value: Object) -> Object {
+    pub fn set(&mut self, name: Identifier, value: Rc<Value>) -> Rc<Value> {
+        let clone        = Rc::clone(&value);
         self.store.insert(name, value);
-        value
+        clone
     }
 }
