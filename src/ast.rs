@@ -8,7 +8,7 @@ pub enum Node {
     Expr(Expression),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Statement {
     Let(LetStatement),
     Return(ReturnStatement),
@@ -16,7 +16,7 @@ pub enum Statement {
     Block(BlockStatement),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expression {
     Ident(Identifier),
     IntegerLiteral(i64),
@@ -51,32 +51,32 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct LetStatement {
     pub name: Identifier,
     pub value: Expression,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ReturnStatement {
     pub return_value: Expression,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct ExpressionStatement {
     pub expression: Expression,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Debug, Eq, Hash)]
+#[derive(PartialEq, Debug, Eq, Hash, Clone)]
 pub struct Identifier(pub String);
 
 #[allow(non_camel_case_types)]
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum InfixOperator {
     PLUS,
     MINUS,
@@ -88,7 +88,7 @@ pub enum InfixOperator {
     NOT_EQ,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum PrefixOperator {
     MINUS,
     BANG,

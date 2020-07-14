@@ -1,10 +1,10 @@
 use crate::ast::Node::Prog;
 use crate::environment::Environment;
 use crate::evaluator;
-use crate::evaluator::Evaluator;
 use crate::lexer::lexer::Lexer;
 use crate::parser::Parser;
 use std::io;
+use std::rc::Rc;
 
 static PROMT: &str = ">> ";
 
@@ -14,7 +14,6 @@ pub fn start() {
     let stdin = io::stdin();
 
     let environment = Environment::new();
-    let mut evaluator = Evaluator::new(environment);
 
     loop {
         println!("{}", PROMT);
@@ -25,7 +24,7 @@ pub fn start() {
                 let parser = Parser::new(lexer);
 
                 match parser.parse_program() {
-                    Ok(program) => match evaluator.eval(Prog(program)) {
+                    Ok(program) => match evaluator::eval(Prog(program), Rc::clone(&environment)) {
                         Ok(obj) => println!("{}", obj),
                         Err(err) => println!("evaluation error {}", err),
                     },

@@ -1,5 +1,5 @@
 use core::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Debug, PartialEq)]
@@ -7,6 +7,32 @@ pub enum Value {
     Num(Numeric),
     Boolean(bool),
     Null,
+    Func(Rc<Function>),
+}
+pub struct Function {
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
+    pub environment: Rc<RefCell<Environment>>,
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Self) -> bool {
+        self as *const Function == other as *const Function
+    }
+}
+
+impl Debug for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Function({}) {{...}}",
+            self.parameters
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -84,6 +110,7 @@ pub const FALSE: Value = Value::Boolean(false);
 use crate::ast::{BlockStatement, Identifier};
 use crate::environment::Environment;
 use crate::object::Value::*;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 impl Display for Value {
@@ -92,6 +119,16 @@ impl Display for Value {
             Num(n) => write!(f, "{}", n),
             Boolean(b) => write!(f, "{}", b),
             Null => write!(f, "null"),
+            Func(func) => write!(
+                f,
+                "fn({}){{\n{}\n}}",
+                func.parameters
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                func.body.to_string()
+            ),
         }
     }
 }
