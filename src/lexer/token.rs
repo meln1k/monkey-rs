@@ -8,6 +8,7 @@ pub enum TokenType {
     IDENT(String),
     INT(String),
     FLOAT(String),
+    STRING(String),
 
     // Operators
     ASSIGN,

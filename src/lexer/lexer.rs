@@ -72,6 +72,11 @@ impl<'a> Lexer<'a> {
                 '*' => self.token(ASTERISK),
                 '<' => self.token(LT),
                 '>' => self.token(GT),
+                '"' => {
+                    let pos = self.current_position;
+                    let literal = self.read_string();
+                    self.token_pos(STRING(literal), pos)
+                }
                 c if c.is_alphabetic() || char == '_' => {
                     let pos = self.current_position;
 
@@ -103,6 +108,18 @@ impl<'a> Lexer<'a> {
                 self.next_char();
             } else {
                 break;
+            }
+        }
+        literal
+    }
+
+    fn read_string(&mut self) -> String {
+        let mut literal = String::new();
+        while let Some(ch) = self.next_char() {
+            if ch == '"' {
+                break;
+            } else {
+                literal.push(ch);
             }
         }
         literal
@@ -169,14 +186,13 @@ impl<'a> Iterator for Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-
     use crate::lexer::lexer::Lexer;
     use crate::lexer::token::TokenType;
     use crate::lexer::token::TokenType::*;
 
     #[test]
     fn test_next_token() {
-        let input = "let five = 5;
+        let input = r#"let five = 5;
         let ten = 10;
         let pi = 3.14;
 
@@ -196,7 +212,9 @@ mod tests {
 
         10 == 10;
         10 != 9;
-        ";
+        "foobar"
+        "foo bar"
+        "#;
 
         #[derive(Debug)]
         struct TestInput(TokenType);
@@ -280,6 +298,8 @@ mod tests {
             TestInput(NOT_EQ),
             TestInput(INT("9".to_owned())),
             TestInput(SEMICOLON),
+            TestInput(STRING("foobar".to_owned())),
+            TestInput(STRING("foo bar".to_owned())),
             TestInput(EOF),
         ];
 
