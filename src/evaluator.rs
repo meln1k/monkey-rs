@@ -11,6 +11,7 @@ use core::fmt;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
+use std::ops::Add;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -206,6 +207,13 @@ fn eval_infix_expression(
             InfixOperator::GT => Ok(native_bool_to_boolean_object(l > r)),
             InfixOperator::EQ => Ok(native_bool_to_boolean_object(l == r)),
             InfixOperator::NOT_EQ => Ok(native_bool_to_boolean_object(l != r)),
+        },
+        (Value::StringValue(l), Value::StringValue(r)) => match operator {
+            InfixOperator::PLUS => Ok(Rc::new(Value::StringValue(format!("{}{}", l, r)))),
+            other => Err(Error(format!(
+                "unknown operator: {} {} {}",
+                left, other, right
+            ))),
         },
         (left, right) if std::mem::discriminant(left) == std::mem::discriminant(right) => {
             match operator {
@@ -415,6 +423,7 @@ fn test_error_handling() {
         Test("1 / 0", "division by 0: 1/0"),
         Test("1. / 0.", "division by 0: 1/0"),
         Test("foobar", "identifier not found: foobar"),
+        Test(r#""Hello" - "World""#, "unknown operator: Hello - World"),
     ];
 
     for Test(input, error_msg) in tests {
@@ -507,6 +516,18 @@ fn test_closures() {
 #[test]
 fn test_string_literal() {
     let input = r#" "Hello World!" "#;
+
+    let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
+
+    match &*evaluated {
+        Value::StringValue(s) => assert_eq!(s, "Hello World!"),
+        other => panic!("expected StringValue but got {:?}", other),
+    }
+}
+
+#[test]
+fn test_string_concatenation() {
+    let input = r#" "Hello" + " " + "World!" "#;
 
     let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
 
