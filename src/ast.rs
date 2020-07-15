@@ -44,6 +44,9 @@ pub enum Expression {
         function: Box<Expression>,
         arguments: Vec<Expression>,
     },
+    StringLiteral {
+        value: String,
+    },
 }
 
 #[derive(Debug)]
@@ -168,6 +171,7 @@ impl Display for Expression {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
+            Expression::StringLiteral { value } => write!(f, "{}", value),
         }
     }
 }

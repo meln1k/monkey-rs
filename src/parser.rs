@@ -15,6 +15,7 @@ pub struct ParsingError {
     line: i32,
     positon: i32,
 }
+
 type ParsingErrors = Vec<ParsingError>;
 type ParsingResult<T> = Result<T, ParsingError>;
 
@@ -125,14 +126,15 @@ impl<'a> Parser<'a> {
 
     fn parse_expression(&mut self, precedence: Precedence) -> ParsingResult<Expression> {
         let mut left_expr = match self.cur_token.token_type {
-            TokenType::IDENT(_) => Parser::parse_identifier(self),
-            TokenType::INT(_) => Parser::parse_integer_literal(self),
-            TokenType::FLOAT(_) => Parser::parse_float_literal(self),
-            TokenType::BANG | TokenType::MINUS => Parser::parse_prefix_expression(self),
-            TokenType::TRUE | TokenType::FALSE => Parser::parse_boolean(self),
-            TokenType::LPAREN => Parser::parse_grouped_expression(self),
-            TokenType::IF => Parser::parse_if_expression(self),
-            TokenType::FUNCTION => Parser::parse_function_literal(self),
+            TokenType::IDENT(_) => self.parse_identifier(),
+            TokenType::INT(_) => self.parse_integer_literal(),
+            TokenType::FLOAT(_) => self.parse_float_literal(),
+            TokenType::BANG | TokenType::MINUS => self.parse_prefix_expression(),
+            TokenType::TRUE | TokenType::FALSE => self.parse_boolean(),
+            TokenType::LPAREN => self.parse_grouped_expression(),
+            TokenType::IF => self.parse_if_expression(),
+            TokenType::FUNCTION => self.parse_function_literal(),
+            TokenType::STRING(_) => self.parse_string_literal(),
             _ => self.error(format!(
                 "no prefix parse function for {:?} found",
                 self.cur_token
@@ -197,6 +199,15 @@ impl<'a> Parser<'a> {
                 Err(err) => self.error(format!("can't parse value {:?} as float: {}", value, err)),
             },
             other => self.error(format!("Expected FLOAT but got {:?}", other)),
+        }
+    }
+
+    fn parse_string_literal(&mut self) -> ParsingResult<Expression> {
+        match &self.cur_token.token_type {
+            TokenType::STRING(value) => Ok(Expression::StringLiteral {
+                value: value.clone(),
+            }),
+            other => self.error(format!("Expected STRING but got {:?}", other)),
         }
     }
 
@@ -413,6 +424,7 @@ impl Display for ParsingError {
         write!(f, "[{}:{}] {}", self.line, self.positon, self.message)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Expression::*;
@@ -1043,6 +1055,28 @@ mod tests {
                     test_infix_expression(&arguments[2], Int(4), InfixOperator::PLUS, Int(5));
                 }
                 other => panic!("expected CallExpression but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_string_literal_expressions() {
+        let input = r#" "hello world" "#;
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                StringLiteral { value } => assert_eq!(value, "hello world"),
+                other => panic!("expected StringLiteral but got {:?}", other),
             },
             other => panic!("expected ExpressionStatement but got {:?}", other),
         }

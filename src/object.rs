@@ -8,6 +8,7 @@ pub enum Value {
     Boolean(bool),
     Null,
     Func(Rc<Function>),
+    StringValue(String),
 }
 pub struct Function {
     pub parameters: Vec<Identifier>,
@@ -129,6 +130,7 @@ impl Display for Value {
                     .join(", "),
                 func.body.to_string()
             ),
+            StringValue(s) => write!(f, "{}", s),
         }
     }
 }

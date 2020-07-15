@@ -149,6 +149,7 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                 other => Err(EvalError::Error(format!("not a function: {}", other))),
             }
         }
+        Expression::StringLiteral { value } => Ok(Rc::new(Value::StringValue(value.clone()))),
     }
 }
 
@@ -495,11 +496,24 @@ fn test_closures() {
 
     let evaluated =
         test_eval_with_env(input, Rc::clone(&env)).expect(&format!("evaluation failed: {}", input));
+
     test_integer_object(evaluated, 4);
 
     let input = "x";
 
     test_eval_with_env(input, Rc::clone(&env)).expect_err("closure leaked");
+}
+
+#[test]
+fn test_string_literal() {
+    let input = r#" "Hello World!" "#;
+
+    let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
+
+    match &*evaluated {
+        Value::StringValue(s) => assert_eq!(s, "Hello World!"),
+        other => panic!("expected StringValue but got {:?}", other),
+    }
 }
 
 fn test_eval(input: &str) -> EvalResult {
