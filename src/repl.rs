@@ -15,11 +15,18 @@ pub fn start() {
 
     let environment = Environment::new();
 
+    let mut in_multiline_statement = false;
+
     loop {
-        println!("{}", PROMT);
+
+        if !in_multiline_statement {
+            println!("{}", PROMT);
+        }
 
         match stdin.read_line(&mut buffer) {
+            Ok(_) if !is_even_parenthesis(buffer.as_str()) => in_multiline_statement = true,
             Ok(_) => {
+                in_multiline_statement = false;
                 let lexer = Lexer::new(&buffer);
                 let parser = Parser::new(lexer);
 
@@ -41,6 +48,25 @@ pub fn start() {
             }
         }
 
-        buffer.clear();
+        if !in_multiline_statement {
+            buffer.clear();
+        }
     }
+}
+
+fn is_even_parenthesis(input: &str) -> bool {
+    let mut opened_parens = 0;
+    let mut opened_braces = 0;
+
+    for char in input.chars() {
+        match char {
+            '(' => opened_parens += 1,
+            ')' => opened_parens -= 1,
+            '{' => opened_braces += 1,
+            '}' => opened_braces -= 1,
+            _ => ()
+        }
+    }
+
+    opened_parens == 0 && opened_braces == 0
 }
