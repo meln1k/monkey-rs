@@ -5,6 +5,7 @@ mod lexer;
 mod object;
 mod parser;
 mod repl;
+mod builtins;
 
 fn main() {
     println!("Hello user! This is the Monkey programming language!");

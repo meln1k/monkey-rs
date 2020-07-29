@@ -9,7 +9,14 @@ pub enum Value {
     Null,
     Func(Rc<Function>),
     StringValue(String),
+    BuiltinFunc(BuiltinFunction),
 }
+
+#[derive(Debug, PartialEq)]
+pub enum BuiltinFunction {
+    Len
+}
+
 pub struct Function {
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
@@ -131,6 +138,7 @@ impl Display for Value {
                 func.body.to_string()
             ),
             StringValue(s) => write!(f, "{}", s),
+            BuiltinFunc(func) => write!(f, "{}", func)
         }
     }
 }
@@ -140,6 +148,14 @@ impl Display for Numeric {
         match self {
             Numeric::Float(n) => write!(f, "{}", n),
             Numeric::Integer(n) => write!(f, "{}", n),
+        }
+    }
+}
+
+impl Display for BuiltinFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BuiltinFunction::Len => write!(f, "len"),
         }
     }
 }

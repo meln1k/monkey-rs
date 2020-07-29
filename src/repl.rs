@@ -33,7 +33,7 @@ pub fn start() {
                 match parser.parse_program() {
                     Ok(program) => match evaluator::eval(Prog(program), Rc::clone(&environment)) {
                         Ok(obj) => println!("{}", obj),
-                        Err(err) => println!("evaluation error {}", err),
+                        Err(err) => println!("evaluation error: {}", err),
                     },
                     Err(errs) => {
                         for err in errs {

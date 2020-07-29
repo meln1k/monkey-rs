@@ -5,7 +5,7 @@ use crate::environment::Environment;
 use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
 use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
-use crate::object::{Function, Value, FALSE, TRUE};
+use crate::object::{Function, Value, FALSE, TRUE, Numeric, BuiltinFunction};
 use crate::parser::Parser;
 use core::fmt;
 use std::borrow::Borrow;
@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::rc::Rc;
+use crate::builtins;
 
 #[derive(Debug)]
 pub enum EvalError {
@@ -73,6 +74,9 @@ fn eval_statement(statement: &Statement, environment: Rc<RefCell<Environment>>) 
             Err(NonLocalReturnControl(value))
         }
         Statement::Let(LetStatement { name, value }) => {
+            if builtins::builtins(&name.0).is_some() {
+                Err(Error(format!("name '{}' is reserved", &name.0)))?
+            }
             let eval_value = eval_expression(value, Rc::clone(&environment))?;
             Ok(environment.borrow_mut().set(name.clone(), eval_value))
         }
@@ -116,8 +120,9 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
             }
         }
         Expression::Ident(name) => {
-            let env = &*environment;
-            match env.borrow().get(&name) {
+            let builtin = builtins::builtins(&name.0);
+            let env = (&*environment).borrow().get(&name);
+            match builtin.or(env) {
                 Some(obj) => Ok(obj),
                 None => Err(Error(format!("identifier not found: {}", name))),
             }
@@ -146,6 +151,10 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                     }
                     let arguments = eval_expressions(arguments, environment)?;
                     apply_function(func, arguments)
+                },
+                Value::BuiltinFunc(b) => {
+                    let arguments = eval_expressions(arguments, environment)?;
+                    apply_builtin_function(b, arguments)
                 }
                 other => Err(EvalError::Error(format!("not a function: {}", other))),
             }
@@ -179,6 +188,20 @@ fn apply_function(function: &Function, arguments: Vec<Rc<Value>>) -> EvalResult 
     let result = eval_statements(&function.body.statements, env);
 
     result
+}
+
+fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>>) -> EvalResult {
+    match builin {
+        BuiltinFunction::Len => {
+            if arguments.len() != 1 {
+                Err(EvalError::Error(format!("wrong number of arguments. got={}, want=1", arguments.len())))?;
+            }
+            match &*arguments[0] {
+                Value::StringValue(string) => Ok(Rc::new(Value::Num(Numeric::Integer(string.len() as i64)))),
+                other => Err(EvalError::Error(format!("argument to 'len' not supported, got {}", other)))
+            }
+        }
+    }
 }
 
 fn eval_prefix_expression(operator: &PrefixOperator, right: Rc<Value>) -> EvalResult {
@@ -536,6 +559,43 @@ fn test_string_concatenation() {
         other => panic!("expected StringValue but got {:?}", other),
     }
 }
+
+#[test]
+fn test_builtin_function() {
+    struct Test<'a>(&'a str, ExpectedResult<'a>);
+
+    enum ExpectedResult<'a> {
+        Success(i64),
+        Error(&'a str)
+    }
+
+    use ExpectedResult::*;
+
+    let tests = vec![
+        Test(r#"len("")"#, Success(0)),
+        Test(r#"len("four")"#, Success(4)),
+        Test(r#"len("hello world")"#, Success(11)),
+        Test(r#"len(1)"#, Error("argument to 'len' not supported, got 1")),
+        Test(r#"len("one", "two")"#, Error("wrong number of arguments. got=2, want=1"))
+    ];
+
+    for Test(input, expected) in tests {
+
+        match expected {
+            Success(int) => {
+                let evaluated = test_eval(input).expect("eval error");
+                test_integer_object(evaluated, int)
+            },
+            Error(msg) => {
+                match test_eval(input) {
+                    Err(EvalError::Error(message)) => assert_eq!(msg, message.as_str()),
+                    _ => panic!("expected EvalError::Error(message)")
+                }
+            }
+        }
+    }
+}
+
 
 fn test_eval(input: &str) -> EvalResult {
     let lexer = Lexer::new(input);
