@@ -1,19 +1,17 @@
 use crate::ast::Node::Prog;
-use crate::ast::Statement::Block;
 use crate::ast::*;
+use crate::builtins;
+use crate::builtins::BuiltinFunction;
 use crate::environment::Environment;
 use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
 use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
-use crate::object::{Function, Value, FALSE, TRUE, Numeric, BuiltinFunction};
+use crate::object::{Function, Numeric, Value, FALSE, TRUE};
 use crate::parser::Parser;
 use core::fmt;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
-use std::ops::Add;
 use std::rc::Rc;
-use crate::builtins;
 
 #[derive(Debug)]
 pub enum EvalError {
@@ -30,13 +28,13 @@ impl Display for EvalError {
     }
 }
 
-type EvalResult = Result<Rc<Value>, EvalError>;
+pub type EvalResult = Result<Rc<Value>, EvalError>;
 
-pub fn eval(node: Node, environment: Rc<RefCell<Environment>>) -> EvalResult {
-    match node {
-        Node::Prog(Program { ref statements }) => eval_statements(statements, environment),
-        other => todo!(),
-    }
+pub fn eval(
+    Program { ref statements }: Program,
+    environment: Rc<RefCell<Environment>>,
+) -> EvalResult {
+    eval_statements(statements, environment)
 }
 
 fn eval_statements(
@@ -151,15 +149,38 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                     }
                     let arguments = eval_expressions(arguments, environment)?;
                     apply_function(func, arguments)
-                },
+                }
                 Value::BuiltinFunc(b) => {
                     let arguments = eval_expressions(arguments, environment)?;
-                    apply_builtin_function(b, arguments)
+                    builtins::apply_builtin_function(b, arguments)
                 }
                 other => Err(EvalError::Error(format!("not a function: {}", other))),
             }
         }
         Expression::StringLiteral { value } => Ok(Rc::new(Value::StringValue(value.clone()))),
+        Expression::ArrayLiteral { elements } => {
+            let elements = eval_expressions(elements, environment)?;
+            Ok(Rc::new(Value::Array(elements)))
+        }
+        Expression::IndexExpression { left, index } => {
+            let left_eval = eval_expression(left, Rc::clone(&environment))?;
+            let index_eval = eval_expression(index, environment)?;
+
+            match (&*left_eval, &*index_eval) {
+                (Value::Array(elems), &Value::Num(Numeric::Integer(index))) => {
+                    if index < 0 || index > (elems.len()) as i64 - 1 {
+                        Ok(Rc::new(Value::Null))
+                    } else {
+                        let value = &elems[index as usize];
+                        Ok(Rc::clone(value))
+                    }
+                }
+                other => Err(EvalError::Error(format!(
+                    "index operator not supported: {}",
+                    other.0
+                ))),
+            }
+        }
     }
 }
 
@@ -188,20 +209,6 @@ fn apply_function(function: &Function, arguments: Vec<Rc<Value>>) -> EvalResult 
     let result = eval_statements(&function.body.statements, env);
 
     result
-}
-
-fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>>) -> EvalResult {
-    match builin {
-        BuiltinFunction::Len => {
-            if arguments.len() != 1 {
-                Err(EvalError::Error(format!("wrong number of arguments. got={}, want=1", arguments.len())))?;
-            }
-            match &*arguments[0] {
-                Value::StringValue(string) => Ok(Rc::new(Value::Num(Numeric::Integer(string.len() as i64)))),
-                other => Err(EvalError::Error(format!("argument to 'len' not supported, got {}", other)))
-            }
-        }
-    }
 }
 
 fn eval_prefix_expression(operator: &PrefixOperator, right: Rc<Value>) -> EvalResult {
@@ -566,7 +573,7 @@ fn test_builtin_function() {
 
     enum ExpectedResult<'a> {
         Success(i64),
-        Error(&'a str)
+        Error(&'a str),
     }
 
     use ExpectedResult::*;
@@ -576,26 +583,74 @@ fn test_builtin_function() {
         Test(r#"len("four")"#, Success(4)),
         Test(r#"len("hello world")"#, Success(11)),
         Test(r#"len(1)"#, Error("argument to 'len' not supported, got 1")),
-        Test(r#"len("one", "two")"#, Error("wrong number of arguments. got=2, want=1"))
+        Test(
+            r#"len("one", "two")"#,
+            Error("wrong number of arguments. got=2, want=1"),
+        ),
     ];
 
     for Test(input, expected) in tests {
-
         match expected {
             Success(int) => {
                 let evaluated = test_eval(input).expect("eval error");
                 test_integer_object(evaluated, int)
-            },
-            Error(msg) => {
-                match test_eval(input) {
-                    Err(EvalError::Error(message)) => assert_eq!(msg, message.as_str()),
-                    _ => panic!("expected EvalError::Error(message)")
-                }
             }
+            Error(msg) => match test_eval(input) {
+                Err(EvalError::Error(message)) => assert_eq!(msg, message.as_str()),
+                _ => panic!("expected EvalError::Error(message)"),
+            },
         }
     }
 }
 
+#[test]
+fn test_array_literals() {
+    let input = "[1, 2 * 2, 3 + 3]";
+
+    let evaluated = test_eval(input).expect("eval error");
+
+    match &*evaluated {
+        Value::Array(elements) => {
+            assert_eq!(elements.len(), 3);
+            test_integer_object(Rc::clone(&elements[0]), 1);
+            test_integer_object(Rc::clone(&elements[1]), 4);
+            test_integer_object(Rc::clone(&elements[2]), 6);
+        }
+        _ => panic!("expected Array"),
+    }
+}
+
+#[test]
+fn test_array_index_expressions() {
+    struct Test(&'static str, Option<i64>);
+
+    let tests = vec![
+        Test("[1, 2, 3][0]", Some(1)),
+        Test("[1, 2, 3][1]", Some(2)),
+        Test("[1, 2, 3][2]", Some(3)),
+        Test("let i = 0; [1][i];", Some(1)),
+        Test("[1, 2, 3][1 + 1];", Some(3)),
+        Test("let myArray = [1, 2, 3]; myArray[2];", Some(3)),
+        Test(
+            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+            Some(6),
+        ),
+        Test(
+            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+            Some(2),
+        ),
+        Test("[1, 2, 3][3]", None),
+        Test("[1, 2, 3][-1]", None),
+    ];
+
+    for Test(input, expected) in tests {
+        let evaluated = test_eval(input).expect("eval error");
+        match expected {
+            Some(i) => test_integer_object(evaluated, i),
+            None => test_null_object(evaluated),
+        }
+    }
+}
 
 fn test_eval(input: &str) -> EvalResult {
     let lexer = Lexer::new(input);
@@ -610,7 +665,7 @@ fn test_eval(input: &str) -> EvalResult {
     })?;
 
     let env = Environment::new();
-    eval(Prog(program), env)
+    eval(program, env)
 }
 
 fn test_eval_with_env(input: &str, environment: Rc<RefCell<Environment>>) -> EvalResult {
@@ -624,7 +679,7 @@ fn test_eval_with_env(input: &str, environment: Rc<RefCell<Environment>>) -> Eva
                 .join(", "),
         )
     })?;
-    eval(Prog(program), environment)
+    eval(program, environment)
 }
 
 fn test_float_object(obj: Rc<Value>, expected: f64) {
@@ -651,5 +706,12 @@ fn test_boolean_object(obj: Rc<Value>, expected: bool) {
     match &*obj {
         &Value::Boolean(b) => assert_eq!(b, expected),
         other => panic!("expected Integer but got {:?}", other),
+    }
+}
+
+fn test_null_object(obj: Rc<Value>) {
+    match &*obj {
+        Value::Null => (),
+        other => panic!("expected Null but got {:?}", other),
     }
 }

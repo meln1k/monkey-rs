@@ -18,20 +18,25 @@ pub fn start() {
     let mut in_multiline_statement = false;
 
     loop {
-
         if !in_multiline_statement {
             println!("{}", PROMT);
         }
 
         match stdin.read_line(&mut buffer) {
-            Ok(_) if !is_even_parenthesis(buffer.as_str()) => in_multiline_statement = true,
+            Ok(_) if is_even_parenthesis(buffer.as_str()).is_err() => {
+                in_multiline_statement = false;
+                println!("evaluation error: wrong order of braces")
+            }
+            Ok(_) if !is_even_parenthesis(buffer.as_str()).unwrap() => {
+                in_multiline_statement = true
+            }
             Ok(_) => {
                 in_multiline_statement = false;
                 let lexer = Lexer::new(&buffer);
                 let parser = Parser::new(lexer);
 
                 match parser.parse_program() {
-                    Ok(program) => match evaluator::eval(Prog(program), Rc::clone(&environment)) {
+                    Ok(program) => match evaluator::eval(program, Rc::clone(&environment)) {
                         Ok(obj) => println!("{}", obj),
                         Err(err) => println!("evaluation error: {}", err),
                     },
@@ -54,19 +59,26 @@ pub fn start() {
     }
 }
 
-fn is_even_parenthesis(input: &str) -> bool {
-    let mut opened_parens = 0;
-    let mut opened_braces = 0;
+fn is_even_parenthesis(input: &str) -> Result<bool, ()> {
+    let mut parens = Vec::new();
 
     for char in input.chars() {
         match char {
-            '(' => opened_parens += 1,
-            ')' => opened_parens -= 1,
-            '{' => opened_braces += 1,
-            '}' => opened_braces -= 1,
-            _ => ()
+            '(' => parens.push('('),
+            ')' => {
+                if parens.pop() != Some('(') {
+                    Err(())?
+                }
+            }
+            '{' => parens.push('{'),
+            '}' => {
+                if parens.pop() != Some('{') {
+                    Err(())?
+                }
+            }
+            _ => (),
         }
     }
 
-    opened_parens == 0 && opened_braces == 0
+    Ok(parens.is_empty())
 }

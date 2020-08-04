@@ -35,7 +35,7 @@ impl<'a> Lexer<'a> {
         Token {
             token_type,
             line: self.current_line,
-            position: position,
+            position,
         }
     }
 
@@ -51,6 +51,8 @@ impl<'a> Lexer<'a> {
                 '+' => self.token(PLUS),
                 '{' => self.token(LBRACE),
                 '}' => self.token(RBRACE),
+                '[' => self.token(LBRACKET),
+                ']' => self.token(RBRACKET),
                 '=' => match self.peek_char() {
                     Some('=') => {
                         let pos = self.current_position;
@@ -214,6 +216,7 @@ mod tests {
         10 != 9;
         "foobar"
         "foo bar"
+        [1, 2];
         "#;
 
         #[derive(Debug)]
@@ -300,6 +303,12 @@ mod tests {
             TestInput(SEMICOLON),
             TestInput(STRING("foobar".to_owned())),
             TestInput(STRING("foo bar".to_owned())),
+            TestInput(LBRACKET),
+            TestInput(INT("1".to_owned())),
+            TestInput(COMMA),
+            TestInput(INT("2".to_owned())),
+            TestInput(RBRACKET),
+            TestInput(SEMICOLON),
             TestInput(EOF),
         ];
 

@@ -1,4 +1,6 @@
-use crate::ast::Expression::{CallExpression, FunctionLiteral, IfExpression, InfixExpression};
+use crate::ast::Expression::{
+    CallExpression, FunctionLiteral, IfExpression, IndexExpression, InfixExpression,
+};
 use crate::ast::{
     BlockStatement, Expression, ExpressionStatement, Identifier, InfixOperator, LetStatement,
     PrefixOperator, Program, ReturnStatement, Statement,
@@ -8,6 +10,7 @@ use crate::lexer::token::{Token, TokenType};
 use crate::parser::Precedence::{LOWEST, PREFIX};
 use core::fmt;
 use std::fmt::{Display, Formatter};
+use std::process::exit;
 
 #[derive(Debug)]
 pub struct ParsingError {
@@ -34,6 +37,7 @@ enum Precedence {
     PRODUCT,
     PREFIX,
     CALL,
+    INDEX,
 }
 
 impl<'a> Parser<'a> {
@@ -135,6 +139,7 @@ impl<'a> Parser<'a> {
             TokenType::IF => self.parse_if_expression(),
             TokenType::FUNCTION => self.parse_function_literal(),
             TokenType::STRING(_) => self.parse_string_literal(),
+            TokenType::LBRACKET => self.parse_array_literal(),
             _ => self.error(format!(
                 "no prefix parse function for {:?} found",
                 self.cur_token
@@ -159,6 +164,10 @@ impl<'a> Parser<'a> {
                 TokenType::LPAREN => {
                     self.advance_token();
                     left_expr = self.parse_call_expression(left_expr)?;
+                }
+                TokenType::LBRACKET => {
+                    self.advance_token();
+                    left_expr = self.parse_index_expression(left_expr)?;
                 }
                 _ => return Ok(left_expr),
             }
@@ -211,6 +220,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_array_literal(&mut self) -> ParsingResult<Expression> {
+        match &self.cur_token.token_type {
+            TokenType::LBRACKET => {
+                let elements = self.parse_expression_list(TokenType::RBRACKET)?;
+                Ok(Expression::ArrayLiteral { elements })
+            }
+            other => self.error(format!("Expected LBRACKET but got {:?}", other)),
+        }
+    }
+
     fn parse_grouped_expression(&mut self) -> ParsingResult<Expression> {
         self.advance_token();
 
@@ -219,6 +238,29 @@ impl<'a> Parser<'a> {
         self.expect_peek(TokenType::RPAREN)?;
 
         Ok(expr)
+    }
+
+    fn parse_expression_list(&mut self, end: TokenType) -> ParsingResult<Vec<Expression>> {
+        let mut expressions = Vec::new();
+
+        if self.peek_token_is(&end) {
+            self.advance_token();
+            return Ok(expressions);
+        }
+
+        self.advance_token();
+
+        expressions.push(self.parse_expression(Precedence::LOWEST)?);
+
+        while self.peek_token_is(&TokenType::COMMA) {
+            self.advance_token();
+            self.advance_token();
+            expressions.push(self.parse_expression(Precedence::LOWEST)?);
+        }
+
+        self.expect_peek(end)?;
+
+        Ok(expressions)
     }
 
     fn parse_prefix_expression(&mut self) -> ParsingResult<Expression> {
@@ -343,7 +385,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_call_expression(&mut self, func: Expression) -> ParsingResult<Expression> {
-        let arguments = self.parse_call_arguments()?;
+        let arguments = self.parse_expression_list(TokenType::RPAREN)?;
         let function = Box::new(func);
         Ok(CallExpression {
             function,
@@ -351,25 +393,17 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_call_arguments(&mut self) -> ParsingResult<Vec<Expression>> {
-        let mut arguments = Vec::new();
-        if self.peek_token_is(&TokenType::RPAREN) {
-            self.advance_token();
-            return Ok(arguments);
-        }
-
+    fn parse_index_expression(&mut self, left: Expression) -> ParsingResult<Expression> {
         self.advance_token();
-        arguments.push(self.parse_expression(LOWEST)?);
 
-        while self.peek_token_is(&TokenType::COMMA) {
-            self.advance_token();
-            self.advance_token();
-            arguments.push(self.parse_expression(LOWEST)?);
-        }
+        let index = Box::new(self.parse_expression(Precedence::LOWEST)?);
 
-        self.expect_peek(TokenType::RPAREN)?;
+        self.expect_peek(TokenType::RBRACKET)?;
 
-        Ok(arguments)
+        Ok(IndexExpression {
+            left: Box::new(left),
+            index,
+        })
     }
 
     fn current_token_is(&self, t: TokenType) -> bool {
@@ -415,6 +449,7 @@ fn precedences(token: &Token) -> Precedence {
         TokenType::SLASH => PRODUCT,
         TokenType::ASTERISK => PRODUCT,
         TokenType::LPAREN => CALL,
+        TokenType::LBRACKET => INDEX,
         _ => LOWEST,
     }
 }
@@ -428,7 +463,6 @@ impl Display for ParsingError {
 #[cfg(test)]
 mod tests {
     use crate::ast::Expression::*;
-    use crate::ast::InfixOperator::LT;
     use crate::ast::{
         Expression, ExpressionStatement, Identifier, InfixOperator, LetStatement, PrefixOperator,
         ReturnStatement, Statement,
@@ -745,67 +779,58 @@ mod tests {
 
     #[test]
     fn test_operator_precedence_parsing() {
-        type Input = String;
-        type Expected = String;
-        struct Test(Input, Expected);
+        struct Test<'a>(&'a str, &'a str);
 
         let tests = vec![
-            Test("-a * b".to_owned(), "((-a) * b)".to_owned()),
-            Test("!-a".to_owned(), "(!(-a))".to_owned()),
-            Test("a + b + c".to_owned(), "((a + b) + c)".to_owned()),
-            Test("a + b - c".to_owned(), "((a + b) - c)".to_owned()),
-            Test("a * b * c".to_owned(), "((a * b) * c)".to_owned()),
-            Test("a * b / c".to_owned(), "((a * b) / c)".to_owned()),
-            Test("a + b / c".to_owned(), "(a + (b / c))".to_owned()),
+            Test("-a * b", "((-a) * b)"),
+            Test("!-a", "(!(-a))"),
+            Test("a + b + c", "((a + b) + c)"),
+            Test("a + b - c", "((a + b) - c)"),
+            Test("a * b * c", "((a * b) * c)"),
+            Test("a * b / c", "((a * b) / c)"),
+            Test("a + b / c", "(a + (b / c))"),
+            Test("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            Test("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+            Test("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            Test("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
             Test(
-                "a + b * c + d / e - f".to_owned(),
-                "(((a + (b * c)) + (d / e)) - f)".to_owned(),
-            ),
-            Test("3 + 4; -5 * 5".to_owned(), "(3 + 4)((-5) * 5)".to_owned()),
-            Test(
-                "5 > 4 == 3 < 4".to_owned(),
-                "((5 > 4) == (3 < 4))".to_owned(),
-            ),
-            Test(
-                "5 < 4 != 3 > 4".to_owned(),
-                "((5 < 4) != (3 > 4))".to_owned(),
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
             ),
             Test(
-                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_owned(),
-                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_owned(),
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+            Test("true", "true"),
+            Test("false", "false"),
+            Test("3 > 5 == false", "((3 > 5) == false)"),
+            Test("3 < 5 == true", "((3 < 5) == true)"),
+            Test("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            Test("(5 + 5) * 2", "((5 + 5) * 2)"),
+            Test("2 / (5 + 5)", "(2 / (5 + 5))"),
+            Test("-(5 + 5)", "(-(5 + 5))"),
+            Test("!(true == true)", "(!(true == true))"),
+            Test("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            Test(
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
             ),
             Test(
-                "3 + 4 * 5 == 3 * 1 + 4 * 5".to_owned(),
-                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_owned(),
-            ),
-            Test("true".to_owned(), "true".to_owned()),
-            Test("false".to_owned(), "false".to_owned()),
-            Test("3 > 5 == false".to_owned(), "((3 > 5) == false)".to_owned()),
-            Test("3 < 5 == true".to_owned(), "((3 < 5) == true)".to_owned()),
-            Test(
-                "1 + (2 + 3) + 4".to_owned(),
-                "((1 + (2 + 3)) + 4)".to_owned(),
-            ),
-            Test("(5 + 5) * 2".to_owned(), "((5 + 5) * 2)".to_owned()),
-            Test("2 / (5 + 5)".to_owned(), "(2 / (5 + 5))".to_owned()),
-            Test("-(5 + 5)".to_owned(), "(-(5 + 5))".to_owned()),
-            Test("!(true == true)".to_owned(), "(!(true == true))".to_owned()),
-            Test(
-                "a + add(b * c) + d".to_owned(),
-                "((a + add((b * c))) + d)".to_owned(),
+                "add(a + b + c * d / f + g)",
+                "add((((a + b) + ((c * d) / f)) + g))",
             ),
             Test(
-                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))".to_owned(),
-                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_owned(),
+                "a * [1, 2, 3, 4][b * c] * d",
+                "((a * ([1, 2, 3, 4][(b * c)])) * d)",
             ),
             Test(
-                "add(a + b + c * d / f + g)".to_owned(),
-                "add((((a + b) + ((c * d) / f)) + g))".to_owned(),
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
             ),
         ];
 
         for Test(input, expected) in tests {
-            let lexer = Lexer::new(&input);
+            let lexer = Lexer::new(input);
             let program = Parser::new(lexer)
                 .parse_program()
                 .expect("program should be parsable");
@@ -875,7 +900,12 @@ mod tests {
                     consequence,
                     alternative,
                 } => {
-                    test_infix_expression(condition, Str("x".to_owned()), LT, Str("y".to_owned()));
+                    test_infix_expression(
+                        condition,
+                        Str("x".to_owned()),
+                        InfixOperator::LT,
+                        Str("y".to_owned()),
+                    );
                     assert_eq!(consequence.statements.len(), 1);
                     match &consequence.statements[0] {
                         Statement::Expr(ExpressionStatement { expression }) => {
@@ -915,7 +945,12 @@ mod tests {
                     consequence,
                     alternative,
                 } => {
-                    test_infix_expression(condition, Str("x".to_owned()), LT, Str("y".to_owned()));
+                    test_infix_expression(
+                        condition,
+                        Str("x".to_owned()),
+                        InfixOperator::LT,
+                        Str("y".to_owned()),
+                    );
                     assert_eq!(consequence.statements.len(), 1);
                     match &consequence.statements[0] {
                         Statement::Expr(ExpressionStatement { expression }) => {
@@ -1077,6 +1112,58 @@ mod tests {
             Statement::Expr(ExpressionStatement { expression }) => match expression {
                 StringLiteral { value } => assert_eq!(value, "hello world"),
                 other => panic!("expected StringLiteral but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_array_literal_expressions() {
+        let input = "[1, 2 * 2, 3 + 3];";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                ArrayLiteral { elements } => {
+                    assert_eq!(elements.len(), 3);
+                    test_integer_literal(&elements[0], 1);
+                    test_infix_expression(&elements[1], Int(2), InfixOperator::ASTERISK, Int(2));
+                    test_infix_expression(&elements[2], Int(3), InfixOperator::PLUS, Int(3));
+                }
+                other => panic!("expected ArrayLiteral but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parsing_index_expressions() {
+        let input = "myArray[1+1]";
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                IndexExpression { left, index } => {
+                    test_identifier(left, "myArray".to_owned());
+                    test_infix_expression(index, Int(1), InfixOperator::PLUS, Int(1));
+                }
+                other => panic!("expected IndexExpression but got {:?}", other),
             },
             other => panic!("expected ExpressionStatement but got {:?}", other),
         }

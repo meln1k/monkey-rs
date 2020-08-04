@@ -10,11 +10,7 @@ pub enum Value {
     Func(Rc<Function>),
     StringValue(String),
     BuiltinFunc(BuiltinFunction),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum BuiltinFunction {
-    Len
+    Array(Vec<Rc<Value>>),
 }
 
 pub struct Function {
@@ -116,6 +112,7 @@ pub const TRUE: Value = Value::Boolean(true);
 pub const FALSE: Value = Value::Boolean(false);
 
 use crate::ast::{BlockStatement, Identifier};
+use crate::builtins::BuiltinFunction;
 use crate::environment::Environment;
 use crate::object::Value::*;
 use std::cell::RefCell;
@@ -138,7 +135,16 @@ impl Display for Value {
                 func.body.to_string()
             ),
             StringValue(s) => write!(f, "{}", s),
-            BuiltinFunc(func) => write!(f, "{}", func)
+            BuiltinFunc(func) => write!(f, "{}", func),
+            Array(elems) => {
+                let mut strings = Vec::new();
+
+                for elem in elems {
+                    strings.push(elem.to_string())
+                }
+
+                write!(f, "[{}]", strings.join(", "))
+            }
         }
     }
 }
@@ -156,6 +162,10 @@ impl Display for BuiltinFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             BuiltinFunction::Len => write!(f, "len"),
+            BuiltinFunction::First => write!(f, "first"),
+            BuiltinFunction::Last => write!(f, "last"),
+            BuiltinFunction::Rest => write!(f, "rest"),
+            BuiltinFunction::Push => write!(f, "push"),
         }
     }
 }

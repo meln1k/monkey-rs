@@ -47,6 +47,13 @@ pub enum Expression {
     StringLiteral {
         value: String,
     },
+    ArrayLiteral {
+        elements: Vec<Expression>,
+    },
+    IndexExpression {
+        left: Box<Expression>,
+        index: Box<Expression>,
+    },
 }
 
 #[derive(Debug)]
@@ -172,6 +179,13 @@ impl Display for Expression {
                     .join(", ")
             ),
             Expression::StringLiteral { value } => write!(f, "{}", value),
+            Expression::ArrayLiteral { elements } => {
+                let elems: Vec<String> = elements.iter().map(|e| e.to_string()).collect();
+                write!(f, "[{}]", elems.join(", "))
+            }
+            Expression::IndexExpression { left, index } => {
+                write!(f, "({}[{}])", left.to_string(), index.to_string())
+            }
         }
     }
 }
