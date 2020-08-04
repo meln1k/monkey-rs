@@ -31,6 +31,7 @@ pub enum TokenType {
     RBRACE,
     LBRACKET,
     RBRACKET,
+    COLON,
 
     // Keywords
     FUNCTION,

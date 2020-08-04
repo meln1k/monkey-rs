@@ -79,6 +79,7 @@ impl<'a> Lexer<'a> {
                     let literal = self.read_string();
                     self.token_pos(STRING(literal), pos)
                 }
+                ':' => self.token(COLON),
                 c if c.is_alphabetic() || char == '_' => {
                     let pos = self.current_position;
 
@@ -217,6 +218,7 @@ mod tests {
         "foobar"
         "foo bar"
         [1, 2];
+        {"foo": "bar"}
         "#;
 
         #[derive(Debug)]
@@ -309,6 +311,11 @@ mod tests {
             TestInput(INT("2".to_owned())),
             TestInput(RBRACKET),
             TestInput(SEMICOLON),
+            TestInput(LBRACE),
+            TestInput(STRING("foo".to_owned())),
+            TestInput(COLON),
+            TestInput(STRING("bar".to_owned())),
+            TestInput(RBRACE),
             TestInput(EOF),
         ];
 
