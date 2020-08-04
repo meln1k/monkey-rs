@@ -10,7 +10,8 @@ pub enum BuiltinFunction {
     First,
     Last,
     Rest,
-    Push
+    Push,
+    Puts,
 }
 
 pub fn builtins(name: &str) -> Option<Rc<Value>> {
@@ -20,6 +21,7 @@ pub fn builtins(name: &str) -> Option<Rc<Value>> {
         "last" => Some(Rc::new(BuiltinFunc(BuiltinFunction::Last))),
         "rest" => Some(Rc::new(BuiltinFunc(BuiltinFunction::Rest))),
         "push" => Some(Rc::new(BuiltinFunc(BuiltinFunction::Push))),
+        "puts" => Some(Rc::new(BuiltinFunc(BuiltinFunction::Puts))),
         _ => None,
     }
 }
@@ -89,6 +91,12 @@ pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>
                     other
                 ))),
             }
+        }
+        BuiltinFunction::Puts => {
+            for arg in arguments {
+                println!("{}", arg);
+            }
+            Ok(Rc::new(Value::Null))
         }
     }
 }
