@@ -181,6 +181,7 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                 ))),
             }
         }
+        Expression::HashLiteral { pairs } => todo!()
     }
 }
 

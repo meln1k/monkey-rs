@@ -11,6 +11,7 @@ use crate::parser::Precedence::{LOWEST, PREFIX};
 use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
+use crate::lexer::token::TokenType::RBRACE;
 
 #[derive(Debug)]
 pub struct ParsingError {
@@ -140,6 +141,7 @@ impl<'a> Parser<'a> {
             TokenType::FUNCTION => self.parse_function_literal(),
             TokenType::STRING(_) => self.parse_string_literal(),
             TokenType::LBRACKET => self.parse_array_literal(),
+            TokenType::LBRACE => self.parse_hash_literal(),
             _ => self.error(format!(
                 "no prefix parse function for {:?} found",
                 self.cur_token
@@ -227,6 +229,34 @@ impl<'a> Parser<'a> {
                 Ok(Expression::ArrayLiteral { elements })
             }
             other => self.error(format!("Expected LBRACKET but got {:?}", other)),
+        }
+    }
+
+    fn parse_hash_literal(&mut self) -> ParsingResult<Expression> {
+        match &self.cur_token.token_type {
+            TokenType::LBRACE => {
+                let mut pairs = Vec::new();
+
+                while !self.peek_token_is(&TokenType::RBRACE) {
+                    self.advance_token();
+                    let key = self.parse_expression(LOWEST)?;
+                    self.expect_peek(TokenType::COLON)?;
+                    self.advance_token();
+                    let value = self.parse_expression(LOWEST)?;
+
+                    pairs.push((Box::new(key), Box::new(value)));
+
+                    if !self.peek_token_is(&TokenType::RBRACE) {
+                        self.expect_peek(TokenType::COMMA)?;
+                    }
+                }
+
+                self.expect_peek(TokenType::RBRACE)?;
+
+
+                Ok(Expression::HashLiteral { pairs })
+            }
+            other => self.error(format!("Expected LBRACE but got {:?}", other)),
         }
     }
 
@@ -470,6 +500,8 @@ mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::tests::ExpectedExprValue::{Bool, Int, Str};
     use crate::parser::Parser;
+    use std::collections::HashMap;
+    use std::collections::hash_map::RandomState;
 
     #[test]
     fn test_let_statements() {
@@ -1164,6 +1196,104 @@ mod tests {
                     test_infix_expression(index, Int(1), InfixOperator::PLUS, Int(1));
                 }
                 other => panic!("expected IndexExpression but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parsing_hash_literals_string_keys() {
+        let input = r#"{"one": 1, "two": 2, "three": 3}"#;
+
+        let mut expected: HashMap<String, i64> = HashMap::new();
+        expected.insert("one".to_owned(), 1);
+        expected.insert("two".to_owned(), 2);
+        expected.insert("three".to_owned(), 3);
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                HashLiteral { pairs } => {
+                    assert_eq!(pairs.len(), 3);
+                    for (key, value) in pairs {
+                        match key.as_ref() {
+                            Expression::StringLiteral { value } => (),
+                            other => panic!("key is not ast.StringLiteral. got {:?}", other)
+                        }
+                        let expected_value = expected[key.to_string().as_str()];
+                        test_integer_literal(value, expected_value)
+                    }
+                }
+                other => panic!("expected HashLiteral but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parsing_empty_hash_literal() {
+        let input = r#"{}"#;
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                HashLiteral { pairs } => {
+                    assert_eq!(pairs.len(), 0);
+                }
+                other => panic!("expected HashLiteral but got {:?}", other),
+            },
+            other => panic!("expected ExpressionStatement but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parsing_hash_literals_with_expressions() {
+        let input = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5 }"#;
+
+        let mut expected: HashMap<String, fn(&Expression) -> ()> = HashMap::new();
+        expected.insert("one".to_owned(), |e| test_infix_expression(e, Int(0), InfixOperator::PLUS, Int(1)));
+        expected.insert("two".to_owned(), |e| test_infix_expression(e, Int(10), InfixOperator::MINUS, Int(8)));
+        expected.insert("three".to_owned(), |e| test_infix_expression(e, Int(15), InfixOperator::SLASH, Int(5)));
+
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let statements = parser
+            .parse_program()
+            .expect(&format!("program should be parsable, {}", input))
+            .statements;
+
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Expr(ExpressionStatement { expression }) => match expression {
+                HashLiteral { pairs } => {
+                    assert_eq!(pairs.len(), 3);
+                    for (key, value) in pairs {
+                        match key.as_ref() {
+                            Expression::StringLiteral { value } => (),
+                            other => panic!("key is not ast.StringLiteral. got {:?}", other)
+                        }
+                        let test_fn = expected.get(key.to_string().as_str()).expect("No test function found");
+                        test_fn(value)
+                    }
+                }
+                other => panic!("expected HashLiteral but got {:?}", other),
             },
             other => panic!("expected ExpressionStatement but got {:?}", other),
         }
