@@ -6,12 +6,12 @@ use crate::ast::{
     PrefixOperator, Program, ReturnStatement, Statement,
 };
 use crate::lexer::lexer::Lexer;
+use crate::lexer::token::TokenType::RBRACE;
 use crate::lexer::token::{Token, TokenType};
 use crate::parser::Precedence::{LOWEST, PREFIX};
 use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::process::exit;
-use crate::lexer::token::TokenType::RBRACE;
 
 #[derive(Debug)]
 pub struct ParsingError {
@@ -252,7 +252,6 @@ impl<'a> Parser<'a> {
                 }
 
                 self.expect_peek(TokenType::RBRACE)?;
-
 
                 Ok(Expression::HashLiteral { pairs })
             }
@@ -500,8 +499,8 @@ mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::tests::ExpectedExprValue::{Bool, Int, Str};
     use crate::parser::Parser;
-    use std::collections::HashMap;
     use std::collections::hash_map::RandomState;
+    use std::collections::HashMap;
 
     #[test]
     fn test_let_statements() {
@@ -1226,7 +1225,7 @@ mod tests {
                     for (key, value) in pairs {
                         match key.as_ref() {
                             Expression::StringLiteral { value } => (),
-                            other => panic!("key is not ast.StringLiteral. got {:?}", other)
+                            other => panic!("key is not ast.StringLiteral. got {:?}", other),
                         }
                         let expected_value = expected[key.to_string().as_str()];
                         test_integer_literal(value, expected_value)
@@ -1267,9 +1266,15 @@ mod tests {
         let input = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5 }"#;
 
         let mut expected: HashMap<String, fn(&Expression) -> ()> = HashMap::new();
-        expected.insert("one".to_owned(), |e| test_infix_expression(e, Int(0), InfixOperator::PLUS, Int(1)));
-        expected.insert("two".to_owned(), |e| test_infix_expression(e, Int(10), InfixOperator::MINUS, Int(8)));
-        expected.insert("three".to_owned(), |e| test_infix_expression(e, Int(15), InfixOperator::SLASH, Int(5)));
+        expected.insert("one".to_owned(), |e| {
+            test_infix_expression(e, Int(0), InfixOperator::PLUS, Int(1))
+        });
+        expected.insert("two".to_owned(), |e| {
+            test_infix_expression(e, Int(10), InfixOperator::MINUS, Int(8))
+        });
+        expected.insert("three".to_owned(), |e| {
+            test_infix_expression(e, Int(15), InfixOperator::SLASH, Int(5))
+        });
 
         let lexer = Lexer::new(input);
         let parser = Parser::new(lexer);
@@ -1287,9 +1292,11 @@ mod tests {
                     for (key, value) in pairs {
                         match key.as_ref() {
                             Expression::StringLiteral { value } => (),
-                            other => panic!("key is not ast.StringLiteral. got {:?}", other)
+                            other => panic!("key is not ast.StringLiteral. got {:?}", other),
                         }
-                        let test_fn = expected.get(key.to_string().as_str()).expect("No test function found");
+                        let test_fn = expected
+                            .get(key.to_string().as_str())
+                            .expect("No test function found");
                         test_fn(value)
                     }
                 }

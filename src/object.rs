@@ -11,12 +11,25 @@ pub enum Value {
     StringValue(String),
     BuiltinFunc(BuiltinFunction),
     Array(Vec<Rc<Value>>),
+    HashObj(Hash),
 }
 
 pub struct Function {
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
     pub environment: Rc<RefCell<Environment>>,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub enum Hashable {
+    String(String),
+    Int(i64),
+    Boolean(bool),
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Hash {
+    pub pairs: HashMap<Hashable, Rc<Value>>,
 }
 
 impl PartialEq for Function {
@@ -116,6 +129,7 @@ use crate::builtins::BuiltinFunction;
 use crate::environment::Environment;
 use crate::object::Value::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 impl Display for Value {
@@ -145,6 +159,21 @@ impl Display for Value {
 
                 write!(f, "[{}]", strings.join(", "))
             }
+            HashObj(Hash { pairs }) => {
+                let strings: Vec<String> =
+                    pairs.iter().map(|(k, v)| format!("{}: {}", k, v)).collect();
+                write!(f, "{{{}}}", strings.join(", "))
+            }
+        }
+    }
+}
+
+impl Display for Hashable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Hashable::String(s) => write!(f, "{}", s),
+            Hashable::Int(i) => write!(f, "{}", i),
+            Hashable::Boolean(b) => write!(f, "{}", b),
         }
     }
 }
@@ -166,6 +195,7 @@ impl Display for BuiltinFunction {
             BuiltinFunction::Last => write!(f, "last"),
             BuiltinFunction::Rest => write!(f, "rest"),
             BuiltinFunction::Push => write!(f, "push"),
+            BuiltinFunction::Puts => write!(f, "puts"),
         }
     }
 }

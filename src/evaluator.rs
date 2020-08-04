@@ -6,10 +6,11 @@ use crate::environment::Environment;
 use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
 use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
-use crate::object::{Function, Numeric, Value, FALSE, TRUE};
+use crate::object::{Function, Hash, Hashable, Numeric, Value, FALSE, TRUE};
 use crate::parser::Parser;
 use core::fmt;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 
@@ -175,13 +176,36 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                         Ok(Rc::clone(value))
                     }
                 }
+                (Value::HashObj(Hash{pairs}), index) => {
+                    let key = match index {
+                        Value::StringValue(s) => Hashable::String(s.clone()),
+                        &Value::Boolean(b) => Hashable::Boolean(b),
+                        &Value::Num(Numeric::Integer(i)) => Hashable::Int(i),
+                        _ => Err(EvalError::Error(format!("unusable as hash key")))?,
+                    };
+                    Ok(Rc::clone(pairs.get(&key).unwrap_or(&Rc::new(Value::Null))))
+                }
                 other => Err(EvalError::Error(format!(
                     "index operator not supported: {}",
                     other.0
                 ))),
             }
         }
-        Expression::HashLiteral { pairs } => todo!()
+        Expression::HashLiteral { pairs } => {
+            let mut map = HashMap::new();
+            for (key_expr, value_expr) in pairs {
+                let key = eval_expression(key_expr, Rc::clone(&environment))?;
+                let hashable = match &*key {
+                    Value::StringValue(s) => Hashable::String(s.clone()),
+                    Value::Boolean(b) => Hashable::Boolean(*b),
+                    Value::Num(Numeric::Integer(i)) => Hashable::Int(*i),
+                    other => Err(EvalError::Error(format!("unusable as hash key: {}", other)))?,
+                };
+                let value = eval_expression(value_expr, Rc::clone(&environment))?;
+                map.insert(hashable, value);
+            }
+            Ok(Rc::new(Value::HashObj(Hash { pairs: map })))
+        }
     }
 }
 
@@ -455,6 +479,7 @@ fn test_error_handling() {
         Test("1. / 0.", "division by 0: 1/0"),
         Test("foobar", "identifier not found: foobar"),
         Test(r#""Hello" - "World""#, "unknown operator: Hello - World"),
+        Test(r#"{"name": "Monkey"}[fn(x) { x }];"#, "unusable as hash key"),
     ];
 
     for Test(input, error_msg) in tests {
@@ -642,6 +667,66 @@ fn test_array_index_expressions() {
         ),
         Test("[1, 2, 3][3]", None),
         Test("[1, 2, 3][-1]", None),
+    ];
+
+    for Test(input, expected) in tests {
+        let evaluated = test_eval(input).expect("eval error");
+        match expected {
+            Some(i) => test_integer_object(evaluated, i),
+            None => test_null_object(evaluated),
+        }
+    }
+}
+
+#[test]
+fn test_hash_literals() {
+    let input = r#"
+    let two = "two";
+    {
+        "one": 10 - 9,
+        two: 1 + 1,
+        "thr" + "ee": 6 / 2,
+        4: 4,
+        true: 5,
+        false: 6
+    }"#;
+
+    let mut expected = HashMap::new();
+    expected.insert(Hashable::String("one".to_owned()), 1);
+    expected.insert(Hashable::String("two".to_owned()), 2);
+    expected.insert(Hashable::String("three".to_owned()), 3);
+    expected.insert(Hashable::Int(4), 4);
+    expected.insert(Hashable::Boolean(true), 5);
+    expected.insert(Hashable::Boolean(false), 6);
+
+    let evaluated = test_eval(input).expect("eval error");
+
+    match &*evaluated {
+        Value::HashObj(Hash { pairs }) => {
+            assert_eq!(pairs.len(), 6);
+            for (expected_key, expected_value) in expected {
+                let pair = pairs
+                    .get(&expected_key)
+                    .expect("no pair for given key in Pairs");
+                test_integer_object(Rc::clone(pair), expected_value)
+            }
+        }
+        _ => panic!("expected Array"),
+    }
+}
+
+#[test]
+fn test_hash_index_expressions() {
+    struct Test(&'static str, Option<i64>);
+
+    let tests = vec![
+        Test( r#"{"foo": 5}["foo"]"#, Some(5)),
+        Test( r#"{"foo": 5}["bar"]"#, None),
+        Test( r#"let key = "foo"; {"foo": 5}[key]"#, Some(5)),
+        Test( r#"{}["foo"]"#, None),
+        Test( r#"{5: 5}[5]"#, Some(5)),
+        Test( r#"{true: 5}[true]"#, Some(5)),
+        Test( r#"{false: 5}[false]"#, Some(5)),
     ];
 
     for Test(input, expected) in tests {

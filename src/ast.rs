@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum Node {
@@ -56,8 +56,8 @@ pub enum Expression {
         index: Box<Expression>,
     },
     HashLiteral {
-        pairs: Vec<(Box<Expression>, Box<Expression>)>
-    }
+        pairs: Vec<(Box<Expression>, Box<Expression>)>,
+    },
 }
 
 #[derive(Debug)]
@@ -193,7 +193,7 @@ impl Display for Expression {
             Expression::HashLiteral { pairs } => {
                 let strings: Vec<String> = pairs
                     .iter()
-                    .map(|(k,v)|  format!("{}:{}", *k, *v))
+                    .map(|(k, v)| format!("{}:{}", *k, *v))
                     .collect();
                 write!(f, "{{{}}}", strings.join(", "))
             }
