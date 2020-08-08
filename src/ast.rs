@@ -1,20 +1,12 @@
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug)]
-pub enum Node {
-    Prog(Program),
-    Stat(Statement),
-    Expr(Expression),
-}
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Statement {
     Let(LetStatement),
     Return(ReturnStatement),
     Expr(ExpressionStatement),
-    Block(BlockStatement),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -130,7 +122,6 @@ impl Display for Statement {
                 write!(f, "return {};", return_value)
             }
             Statement::Expr(ExpressionStatement { expression }) => write!(f, "{}", expression),
-            Statement::Block(block_statement) => write!(f, "{}", block_statement.to_string()),
         }
     }
 }

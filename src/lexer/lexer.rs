@@ -182,7 +182,7 @@ impl<'a> Iterator for Lexer<'a> {
         let next_token = self.next_token();
         match &next_token.token_type {
             EOF => None,
-            other => Some(next_token),
+            _ => Some(next_token),
         }
     }
 }

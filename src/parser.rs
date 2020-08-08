@@ -6,12 +6,10 @@ use crate::ast::{
     PrefixOperator, Program, ReturnStatement, Statement,
 };
 use crate::lexer::lexer::Lexer;
-use crate::lexer::token::TokenType::RBRACE;
 use crate::lexer::token::{Token, TokenType};
 use crate::parser::Precedence::{LOWEST, PREFIX};
 use core::fmt;
 use std::fmt::{Display, Formatter};
-use std::process::exit;
 
 #[derive(Debug)]
 pub struct ParsingError {

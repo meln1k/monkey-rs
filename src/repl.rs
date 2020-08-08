@@ -1,4 +1,3 @@
-use crate::ast::Node::Prog;
 use crate::environment::Environment;
 use crate::evaluator;
 use crate::lexer::lexer::Lexer;

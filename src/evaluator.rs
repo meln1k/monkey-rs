@@ -1,13 +1,9 @@
-use crate::ast::Node::Prog;
 use crate::ast::*;
 use crate::builtins;
-use crate::builtins::BuiltinFunction;
 use crate::environment::Environment;
 use crate::evaluator::EvalError::{Error, NonLocalReturnControl};
-use crate::lexer::lexer::Lexer;
 use crate::object::Numeric::{Float, Integer};
 use crate::object::{Function, Hash, Hashable, Numeric, Value, FALSE, TRUE};
-use crate::parser::Parser;
 use core::fmt;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -67,7 +63,6 @@ fn eval_statement(statement: &Statement, environment: Rc<RefCell<Environment>>) 
         Statement::Expr(ExpressionStatement { expression }) => {
             eval_expression(expression, environment)
         }
-        Statement::Block(BlockStatement { statements }) => eval_statements(statements, environment),
         Statement::Return(ReturnStatement { return_value }) => {
             let value = eval_expression(return_value, environment)?;
             Err(NonLocalReturnControl(value))
@@ -176,7 +171,7 @@ fn eval_expression(expression: &Expression, environment: Rc<RefCell<Environment>
                         Ok(Rc::clone(value))
                     }
                 }
-                (Value::HashObj(Hash{pairs}), index) => {
+                (Value::HashObj(Hash { pairs }), index) => {
                     let key = match index {
                         Value::StringValue(s) => Hashable::String(s.clone()),
                         &Value::Boolean(b) => Hashable::Boolean(b),
@@ -310,245 +305,255 @@ fn eval_minus_operator_expression(right: Rc<Value>) -> EvalResult {
     }
 }
 
-#[test]
-fn test_eval_integer_expr() {
-    struct Test<'a>(&'a str, i64);
+#[cfg(test)]
+mod tests {
 
-    let tests = vec![
-        Test("5", 5),
-        Test("10", 10),
-        Test("-5", -5),
-        Test("-10", -10),
-        Test("5 + 5 + 5 + 5 - 10", 10),
-        Test("2 * 2 * 2 * 2 * 2", 32),
-        Test("-50 + 100 + -50", 0),
-        Test("5 * 2 + 10", 20),
-        Test("5 + 2 * 10", 25),
-        Test("20 + 2 * -10", 0),
-        Test("50 / 2 * 2 + 10", 60),
-        Test("2 * (5 + 10)", 30),
-        Test("3 * 3 * 3 + 10", 37),
-        Test("3 * (3 * 3) + 10", 37),
-        Test("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
-    ];
+    use crate::lexer::lexer::Lexer;
+    use crate::parser::Parser;
+    use super::*;
 
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-        test_integer_object(evaluated, expected);
-    }
-}
+    #[test]
+    fn test_eval_integer_expr() {
+        struct Test<'a>(&'a str, i64);
 
-#[test]
-fn test_eval_float_expr() {
-    struct Test<'a>(&'a str, f64);
+        let tests = vec![
+            Test("5", 5),
+            Test("10", 10),
+            Test("-5", -5),
+            Test("-10", -10),
+            Test("5 + 5 + 5 + 5 - 10", 10),
+            Test("2 * 2 * 2 * 2 * 2", 32),
+            Test("-50 + 100 + -50", 0),
+            Test("5 * 2 + 10", 20),
+            Test("5 + 2 * 10", 25),
+            Test("20 + 2 * -10", 0),
+            Test("50 / 2 * 2 + 10", 60),
+            Test("2 * (5 + 10)", 30),
+            Test("3 * 3 * 3 + 10", 37),
+            Test("3 * (3 * 3) + 10", 37),
+            Test("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
+        ];
 
-    let tests = vec![
-        Test("5.", 5.),
-        Test("10.0", 10.),
-        Test("-5.2", -5.2),
-        Test("-10.3", -10.3),
-        Test("5. + 5.0 + 5.000 + 5 - 10", 10.),
-        Test("2. * 2. * 2. * 2 * 2", 32.),
-        Test("-50.0 + 100 + -50", 0.),
-        Test("(5. + 10 * 2 + 15. / 3.) * 2 + -10", 50.),
-    ];
-
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-        test_float_object(evaluated, expected);
-    }
-}
-
-#[test]
-fn test_eval_boolean_expr() {
-    struct Test<'a>(&'a str, bool);
-
-    let tests = vec![
-        Test("true", true),
-        Test("false", false),
-        Test("1 < 2", true),
-        Test("1 > 2", false),
-        Test("1 < 1", false),
-        Test("1 > 1", false),
-        Test("1 == 1", true),
-        Test("1 != 1", false),
-        Test("1 == 2", false),
-        Test("1 != 2", true),
-        Test("true == true", true),
-        Test("false == false", true),
-        Test("true == false", false),
-        Test("true != false", true),
-        Test("false != true", true),
-        Test("(1 < 2) == true", true),
-        Test("(1 < 2) == false", false),
-        Test("(1 > 2) == true", false),
-        Test("(1 > 2) == false", true),
-    ];
-
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-        test_boolean_object(evaluated, expected);
-    }
-}
-
-#[test]
-fn test_bang_operator() {
-    struct Test<'a>(&'a str, bool);
-
-    let tests = vec![
-        Test("!true", false),
-        Test("!false", true),
-        Test("!!true", true),
-        Test("!!false", false),
-    ];
-
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-        test_boolean_object(evaluated, expected);
-    }
-}
-
-#[test]
-fn test_if_else_expressions() {
-    struct Test<'a>(&'a str, Option<i64>);
-
-    let tests = vec![
-        Test("if (true) { 10 }", Some(10)),
-        Test("if (false) { 10 }", None),
-        Test("if (1 < 2) { 10 }", Some(10)),
-        Test("if (1 > 2) { 10 }", None),
-        Test("if (1 > 2) { 10 } else { 20 }", Some(20)),
-        Test("if (1 < 2) { 10 } else { 20 }", Some(10)),
-    ];
-
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-
-        match expected {
-            Some(int) => test_integer_object(evaluated, int),
-            None => assert_eq!(&*evaluated, &Value::Null),
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+            test_integer_object(evaluated, expected);
         }
     }
-}
 
-#[test]
-fn test_return_statements() {
-    struct Test<'a>(&'a str, i64);
+    #[test]
+    fn test_eval_float_expr() {
+        struct Test<'a>(&'a str, f64);
 
-    let tests = vec![
-        Test("return 10;", 10),
-        Test("return 10; 9;", 10),
-        Test("return 2 * 5; 9;", 10),
-        Test("9; return 2 * 5; 9;", 10),
-    ];
+        let tests = vec![
+            Test("5.", 5.),
+            Test("10.0", 10.),
+            Test("-5.2", -5.2),
+            Test("-10.3", -10.3),
+            Test("5. + 5.0 + 5.000 + 5 - 10", 10.),
+            Test("2. * 2. * 2. * 2 * 2", 32.),
+            Test("-50.0 + 100 + -50", 0.),
+            Test("(5. + 10 * 2 + 15. / 3.) * 2 + -10", 50.),
+        ];
 
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("evaluation failed");
-        test_integer_object(evaluated, expected)
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+            test_float_object(evaluated, expected);
+        }
     }
-}
 
-#[test]
-fn test_error_handling() {
-    struct Test<'a>(&'a str, &'a str);
+    #[test]
+    fn test_eval_boolean_expr() {
+        struct Test<'a>(&'a str, bool);
 
-    let tests = vec![
-        Test("5 + true;", "type mismatch: 5 + true"),
-        Test("5 + true; 5;", "type mismatch: 5 + true"),
-        Test("-true", "unknown operator: -true"),
-        Test("true + false;", "unknown operator: true + false"),
-        Test("5; true + false; 5", "unknown operator: true + false"),
-        Test(
-            "if (10 > 1) { true + false; }",
-            "unknown operator: true + false",
-        ),
-        Test(
-            r"if (10 > 1) { 
+        let tests = vec![
+            Test("true", true),
+            Test("false", false),
+            Test("1 < 2", true),
+            Test("1 > 2", false),
+            Test("1 < 1", false),
+            Test("1 > 1", false),
+            Test("1 == 1", true),
+            Test("1 != 1", false),
+            Test("1 == 2", false),
+            Test("1 != 2", true),
+            Test("true == true", true),
+            Test("false == false", true),
+            Test("true == false", false),
+            Test("true != false", true),
+            Test("false != true", true),
+            Test("(1 < 2) == true", true),
+            Test("(1 < 2) == false", false),
+            Test("(1 > 2) == true", false),
+            Test("(1 > 2) == false", true),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+            test_boolean_object(evaluated, expected);
+        }
+    }
+
+    #[test]
+    fn test_bang_operator() {
+        struct Test<'a>(&'a str, bool);
+
+        let tests = vec![
+            Test("!true", false),
+            Test("!false", true),
+            Test("!!true", true),
+            Test("!!false", false),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+            test_boolean_object(evaluated, expected);
+        }
+    }
+
+    #[test]
+    fn test_if_else_expressions() {
+        struct Test<'a>(&'a str, Option<i64>);
+
+        let tests = vec![
+            Test("if (true) { 10 }", Some(10)),
+            Test("if (false) { 10 }", None),
+            Test("if (1 < 2) { 10 }", Some(10)),
+            Test("if (1 > 2) { 10 }", None),
+            Test("if (1 > 2) { 10 } else { 20 }", Some(20)),
+            Test("if (1 < 2) { 10 } else { 20 }", Some(10)),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+
+            match expected {
+                Some(int) => test_integer_object(evaluated, int),
+                None => assert_eq!(&*evaluated, &Value::Null),
+            }
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        struct Test<'a>(&'a str, i64);
+
+        let tests = vec![
+            Test("return 10;", 10),
+            Test("return 10; 9;", 10),
+            Test("return 2 * 5; 9;", 10),
+            Test("9; return 2 * 5; 9;", 10),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("evaluation failed");
+            test_integer_object(evaluated, expected)
+        }
+    }
+
+    #[test]
+    fn test_error_handling() {
+        struct Test<'a>(&'a str, &'a str);
+
+        let tests = vec![
+            Test("5 + true;", "type mismatch: 5 + true"),
+            Test("5 + true; 5;", "type mismatch: 5 + true"),
+            Test("-true", "unknown operator: -true"),
+            Test("true + false;", "unknown operator: true + false"),
+            Test("5; true + false; 5", "unknown operator: true + false"),
+            Test(
+                "if (10 > 1) { true + false; }",
+                "unknown operator: true + false",
+            ),
+            Test(
+                r"if (10 > 1) { 
                 if (10 > 1) { 
                     return true + false; 
                 }
                 return 1;
             }",
-            "unknown operator: true + false",
-        ),
-        Test(
-            "if (16) { true + false; }",
-            "type mismatch: expected bool, but got 16",
-        ),
-        Test("1 / 0", "division by 0: 1/0"),
-        Test("1. / 0.", "division by 0: 1/0"),
-        Test("foobar", "identifier not found: foobar"),
-        Test(r#""Hello" - "World""#, "unknown operator: Hello - World"),
-        Test(r#"{"name": "Monkey"}[fn(x) { x }];"#, "unusable as hash key"),
-    ];
+                "unknown operator: true + false",
+            ),
+            Test(
+                "if (16) { true + false; }",
+                "type mismatch: expected bool, but got 16",
+            ),
+            Test("1 / 0", "division by 0: 1/0"),
+            Test("1. / 0.", "division by 0: 1/0"),
+            Test("foobar", "identifier not found: foobar"),
+            Test(r#""Hello" - "World""#, "unknown operator: Hello - World"),
+            Test(
+                r#"{"name": "Monkey"}[fn(x) { x }];"#,
+                "unusable as hash key",
+            ),
+        ];
 
-    for Test(input, error_msg) in tests {
-        let evaluated = test_eval(input);
+        for Test(input, error_msg) in tests {
+            let evaluated = test_eval(input);
 
-        match evaluated {
-            Err(Error(error)) => assert_eq!(error, error_msg),
-            other => panic!("expected an error but got {:?}", other),
+            match evaluated {
+                Err(Error(error)) => assert_eq!(error, error_msg),
+                other => panic!("expected an error but got {:?}", other),
+            }
         }
     }
-}
 
-#[test]
-fn test_let_statements() {
-    struct Test<'a>(&'a str, i64);
+    #[test]
+    fn test_let_statements() {
+        struct Test<'a>(&'a str, i64);
 
-    let tests = vec![
-        Test("let a = 5; a;", 5),
-        Test("let a = 5 * 5; a;", 25),
-        Test("let a = 5; let b = a; b;", 5),
-        Test("let a = 5; let b = a; let c = a + b + 5; c;", 15),
-    ];
+        let tests = vec![
+            Test("let a = 5; a;", 5),
+            Test("let a = 5 * 5; a;", 25),
+            Test("let a = 5; let b = a; b;", 5),
+            Test("let a = 5; let b = a; let c = a + b + 5; c;", 15),
+        ];
 
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
-        test_integer_object(evaluated, expected)
-    }
-}
-
-#[test]
-fn test_function_literal() {
-    let input = "fn(x) { x + 2; };";
-
-    let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
-    match &*evaluated {
-        Value::Func(func) => {
-            let Function {
-                parameters, body, ..
-            } = &**func;
-            assert_eq!(parameters.len(), 1);
-            assert_eq!(parameters[0], Identifier("x".to_owned()));
-            assert_eq!(body.to_string(), "(x + 2)".to_owned())
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
+            test_integer_object(evaluated, expected)
         }
-        other => panic!("expected a Function but got {:?}", other),
     }
-}
 
-#[test]
-fn test_function_application() {
-    struct Test<'a>(&'a str, i64);
+    #[test]
+    fn test_function_literal() {
+        let input = "fn(x) { x + 2; };";
 
-    let tests = vec![
-        Test("let identity = fn(x) { x; }; identity(5);", 5),
-        Test("let identity = fn(x) { return x; }; identity(5);", 5),
-        Test("let double = fn(x) { x * 2; }; double(5);", 10),
-        Test("let add = fn(x, y) { x + y; }; add(5, 5);", 10),
-        Test("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20),
-        Test("fn(x) { x; }(5)", 5),
-    ];
-
-    for Test(input, expected) in tests {
         let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
-        test_integer_object(evaluated, expected)
+        match &*evaluated {
+            Value::Func(func) => {
+                let Function {
+                    parameters, body, ..
+                } = &**func;
+                assert_eq!(parameters.len(), 1);
+                assert_eq!(parameters[0], Identifier("x".to_owned()));
+                assert_eq!(body.to_string(), "(x + 2)".to_owned())
+            }
+            other => panic!("expected a Function but got {:?}", other),
+        }
     }
-}
 
-#[test]
-fn test_closures() {
-    let input = "
+    #[test]
+    fn test_function_application() {
+        struct Test<'a>(&'a str, i64);
+
+        let tests = vec![
+            Test("let identity = fn(x) { x; }; identity(5);", 5),
+            Test("let identity = fn(x) { return x; }; identity(5);", 5),
+            Test("let double = fn(x) { x * 2; }; double(5);", 10),
+            Test("let add = fn(x, y) { x + y; }; add(5, 5);", 10),
+            Test("let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20),
+            Test("fn(x) { x; }(5)", 5),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
+            test_integer_object(evaluated, expected)
+        }
+    }
+
+    #[test]
+    fn test_closures() {
+        let input = "
     let newAdder = fn(x) {
         fn(y) { x + y };
     };
@@ -557,130 +562,130 @@ fn test_closures() {
     addTwo(2);
     ";
 
-    let env = Environment::new();
+        let env = Environment::new();
 
-    let evaluated =
-        test_eval_with_env(input, Rc::clone(&env)).expect(&format!("evaluation failed: {}", input));
+        let evaluated = test_eval_with_env(input, Rc::clone(&env))
+            .expect(&format!("evaluation failed: {}", input));
 
-    test_integer_object(evaluated, 4);
+        test_integer_object(evaluated, 4);
 
-    let input = "x";
+        let input = "x";
 
-    test_eval_with_env(input, Rc::clone(&env)).expect_err("closure leaked");
-}
-
-#[test]
-fn test_string_literal() {
-    let input = r#" "Hello World!" "#;
-
-    let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
-
-    match &*evaluated {
-        Value::StringValue(s) => assert_eq!(s, "Hello World!"),
-        other => panic!("expected StringValue but got {:?}", other),
-    }
-}
-
-#[test]
-fn test_string_concatenation() {
-    let input = r#" "Hello" + " " + "World!" "#;
-
-    let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
-
-    match &*evaluated {
-        Value::StringValue(s) => assert_eq!(s, "Hello World!"),
-        other => panic!("expected StringValue but got {:?}", other),
-    }
-}
-
-#[test]
-fn test_builtin_function() {
-    struct Test<'a>(&'a str, ExpectedResult<'a>);
-
-    enum ExpectedResult<'a> {
-        Success(i64),
-        Error(&'a str),
+        test_eval_with_env(input, Rc::clone(&env)).expect_err("closure leaked");
     }
 
-    use ExpectedResult::*;
+    #[test]
+    fn test_string_literal() {
+        let input = r#" "Hello World!" "#;
 
-    let tests = vec![
-        Test(r#"len("")"#, Success(0)),
-        Test(r#"len("four")"#, Success(4)),
-        Test(r#"len("hello world")"#, Success(11)),
-        Test(r#"len(1)"#, Error("argument to 'len' not supported, got 1")),
-        Test(
-            r#"len("one", "two")"#,
-            Error("wrong number of arguments. got=2, want=1"),
-        ),
-    ];
+        let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
 
-    for Test(input, expected) in tests {
-        match expected {
-            Success(int) => {
-                let evaluated = test_eval(input).expect("eval error");
-                test_integer_object(evaluated, int)
+        match &*evaluated {
+            Value::StringValue(s) => assert_eq!(s, "Hello World!"),
+            other => panic!("expected StringValue but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_string_concatenation() {
+        let input = r#" "Hello" + " " + "World!" "#;
+
+        let evaluated = test_eval(input).expect(&format!("evaluation failed: {}", input));
+
+        match &*evaluated {
+            Value::StringValue(s) => assert_eq!(s, "Hello World!"),
+            other => panic!("expected StringValue but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_builtin_function() {
+        struct Test<'a>(&'a str, ExpectedResult<'a>);
+
+        enum ExpectedResult<'a> {
+            Success(i64),
+            Error(&'a str),
+        }
+
+        use ExpectedResult::*;
+
+        let tests = vec![
+            Test(r#"len("")"#, Success(0)),
+            Test(r#"len("four")"#, Success(4)),
+            Test(r#"len("hello world")"#, Success(11)),
+            Test(r#"len(1)"#, Error("argument to 'len' not supported, got 1")),
+            Test(
+                r#"len("one", "two")"#,
+                Error("wrong number of arguments. got=2, want=1"),
+            ),
+        ];
+
+        for Test(input, expected) in tests {
+            match expected {
+                Success(int) => {
+                    let evaluated = test_eval(input).expect("eval error");
+                    test_integer_object(evaluated, int)
+                }
+                Error(msg) => match test_eval(input) {
+                    Err(EvalError::Error(message)) => assert_eq!(msg, message.as_str()),
+                    _ => panic!("expected EvalError::Error(message)"),
+                },
             }
-            Error(msg) => match test_eval(input) {
-                Err(EvalError::Error(message)) => assert_eq!(msg, message.as_str()),
-                _ => panic!("expected EvalError::Error(message)"),
-            },
         }
     }
-}
 
-#[test]
-fn test_array_literals() {
-    let input = "[1, 2 * 2, 3 + 3]";
+    #[test]
+    fn test_array_literals() {
+        let input = "[1, 2 * 2, 3 + 3]";
 
-    let evaluated = test_eval(input).expect("eval error");
-
-    match &*evaluated {
-        Value::Array(elements) => {
-            assert_eq!(elements.len(), 3);
-            test_integer_object(Rc::clone(&elements[0]), 1);
-            test_integer_object(Rc::clone(&elements[1]), 4);
-            test_integer_object(Rc::clone(&elements[2]), 6);
-        }
-        _ => panic!("expected Array"),
-    }
-}
-
-#[test]
-fn test_array_index_expressions() {
-    struct Test(&'static str, Option<i64>);
-
-    let tests = vec![
-        Test("[1, 2, 3][0]", Some(1)),
-        Test("[1, 2, 3][1]", Some(2)),
-        Test("[1, 2, 3][2]", Some(3)),
-        Test("let i = 0; [1][i];", Some(1)),
-        Test("[1, 2, 3][1 + 1];", Some(3)),
-        Test("let myArray = [1, 2, 3]; myArray[2];", Some(3)),
-        Test(
-            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
-            Some(6),
-        ),
-        Test(
-            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
-            Some(2),
-        ),
-        Test("[1, 2, 3][3]", None),
-        Test("[1, 2, 3][-1]", None),
-    ];
-
-    for Test(input, expected) in tests {
         let evaluated = test_eval(input).expect("eval error");
-        match expected {
-            Some(i) => test_integer_object(evaluated, i),
-            None => test_null_object(evaluated),
+
+        match &*evaluated {
+            Value::Array(elements) => {
+                assert_eq!(elements.len(), 3);
+                test_integer_object(Rc::clone(&elements[0]), 1);
+                test_integer_object(Rc::clone(&elements[1]), 4);
+                test_integer_object(Rc::clone(&elements[2]), 6);
+            }
+            _ => panic!("expected Array"),
         }
     }
-}
 
-#[test]
-fn test_hash_literals() {
-    let input = r#"
+    #[test]
+    fn test_array_index_expressions() {
+        struct Test(&'static str, Option<i64>);
+
+        let tests = vec![
+            Test("[1, 2, 3][0]", Some(1)),
+            Test("[1, 2, 3][1]", Some(2)),
+            Test("[1, 2, 3][2]", Some(3)),
+            Test("let i = 0; [1][i];", Some(1)),
+            Test("[1, 2, 3][1 + 1];", Some(3)),
+            Test("let myArray = [1, 2, 3]; myArray[2];", Some(3)),
+            Test(
+                "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+                Some(6),
+            ),
+            Test(
+                "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+                Some(2),
+            ),
+            Test("[1, 2, 3][3]", None),
+            Test("[1, 2, 3][-1]", None),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("eval error");
+            match expected {
+                Some(i) => test_integer_object(evaluated, i),
+                None => test_null_object(evaluated),
+            }
+        }
+    }
+
+    #[test]
+    fn test_hash_literals() {
+        let input = r#"
     let two = "two";
     {
         "one": 10 - 9,
@@ -691,113 +696,114 @@ fn test_hash_literals() {
         false: 6
     }"#;
 
-    let mut expected = HashMap::new();
-    expected.insert(Hashable::String("one".to_owned()), 1);
-    expected.insert(Hashable::String("two".to_owned()), 2);
-    expected.insert(Hashable::String("three".to_owned()), 3);
-    expected.insert(Hashable::Int(4), 4);
-    expected.insert(Hashable::Boolean(true), 5);
-    expected.insert(Hashable::Boolean(false), 6);
+        let mut expected = HashMap::new();
+        expected.insert(Hashable::String("one".to_owned()), 1);
+        expected.insert(Hashable::String("two".to_owned()), 2);
+        expected.insert(Hashable::String("three".to_owned()), 3);
+        expected.insert(Hashable::Int(4), 4);
+        expected.insert(Hashable::Boolean(true), 5);
+        expected.insert(Hashable::Boolean(false), 6);
 
-    let evaluated = test_eval(input).expect("eval error");
+        let evaluated = test_eval(input).expect("eval error");
 
-    match &*evaluated {
-        Value::HashObj(Hash { pairs }) => {
-            assert_eq!(pairs.len(), 6);
-            for (expected_key, expected_value) in expected {
-                let pair = pairs
-                    .get(&expected_key)
-                    .expect("no pair for given key in Pairs");
-                test_integer_object(Rc::clone(pair), expected_value)
+        match &*evaluated {
+            Value::HashObj(Hash { pairs }) => {
+                assert_eq!(pairs.len(), 6);
+                for (expected_key, expected_value) in expected {
+                    let pair = pairs
+                        .get(&expected_key)
+                        .expect("no pair for given key in Pairs");
+                    test_integer_object(Rc::clone(pair), expected_value)
+                }
+            }
+            _ => panic!("expected Array"),
+        }
+    }
+
+    #[test]
+    fn test_hash_index_expressions() {
+        struct Test(&'static str, Option<i64>);
+
+        let tests = vec![
+            Test(r#"{"foo": 5}["foo"]"#, Some(5)),
+            Test(r#"{"foo": 5}["bar"]"#, None),
+            Test(r#"let key = "foo"; {"foo": 5}[key]"#, Some(5)),
+            Test(r#"{}["foo"]"#, None),
+            Test(r#"{5: 5}[5]"#, Some(5)),
+            Test(r#"{true: 5}[true]"#, Some(5)),
+            Test(r#"{false: 5}[false]"#, Some(5)),
+        ];
+
+        for Test(input, expected) in tests {
+            let evaluated = test_eval(input).expect("eval error");
+            match expected {
+                Some(i) => test_integer_object(evaluated, i),
+                None => test_null_object(evaluated),
             }
         }
-        _ => panic!("expected Array"),
     }
-}
 
-#[test]
-fn test_hash_index_expressions() {
-    struct Test(&'static str, Option<i64>);
+    fn test_eval(input: &str) -> EvalResult {
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let program = parser.parse_program().map_err(|e| {
+            Error(
+                e.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            )
+        })?;
 
-    let tests = vec![
-        Test( r#"{"foo": 5}["foo"]"#, Some(5)),
-        Test( r#"{"foo": 5}["bar"]"#, None),
-        Test( r#"let key = "foo"; {"foo": 5}[key]"#, Some(5)),
-        Test( r#"{}["foo"]"#, None),
-        Test( r#"{5: 5}[5]"#, Some(5)),
-        Test( r#"{true: 5}[true]"#, Some(5)),
-        Test( r#"{false: 5}[false]"#, Some(5)),
-    ];
+        let env = Environment::new();
+        eval(program, env)
+    }
 
-    for Test(input, expected) in tests {
-        let evaluated = test_eval(input).expect("eval error");
-        match expected {
-            Some(i) => test_integer_object(evaluated, i),
-            None => test_null_object(evaluated),
+    fn test_eval_with_env(input: &str, environment: Rc<RefCell<Environment>>) -> EvalResult {
+        let lexer = Lexer::new(input);
+        let parser = Parser::new(lexer);
+        let program = parser.parse_program().map_err(|e| {
+            Error(
+                e.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            )
+        })?;
+        eval(program, environment)
+    }
+
+    fn test_float_object(obj: Rc<Value>, expected: f64) {
+        match &*obj {
+            &Value::Num(n) => match n {
+                Float(i) => assert_eq!(i, expected),
+                other => panic!("expected Integer but got {:?}", other),
+            },
+            other => panic!("expected Integer but got {:?}", other),
         }
     }
-}
 
-fn test_eval(input: &str) -> EvalResult {
-    let lexer = Lexer::new(input);
-    let parser = Parser::new(lexer);
-    let program = parser.parse_program().map_err(|e| {
-        Error(
-            e.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    })?;
-
-    let env = Environment::new();
-    eval(program, env)
-}
-
-fn test_eval_with_env(input: &str, environment: Rc<RefCell<Environment>>) -> EvalResult {
-    let lexer = Lexer::new(input);
-    let parser = Parser::new(lexer);
-    let program = parser.parse_program().map_err(|e| {
-        Error(
-            e.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<String>>()
-                .join(", "),
-        )
-    })?;
-    eval(program, environment)
-}
-
-fn test_float_object(obj: Rc<Value>, expected: f64) {
-    match &*obj {
-        &Value::Num(n) => match n {
-            Float(i) => assert_eq!(i, expected),
+    fn test_integer_object(obj: Rc<Value>, expected: i64) {
+        match &*obj {
+            &Value::Num(n) => match n {
+                Integer(i) => assert_eq!(i, expected),
+                other => panic!("expected Integer but got {:?}", other),
+            },
             other => panic!("expected Integer but got {:?}", other),
-        },
-        other => panic!("expected Integer but got {:?}", other),
+        }
     }
-}
 
-fn test_integer_object(obj: Rc<Value>, expected: i64) {
-    match &*obj {
-        &Value::Num(n) => match n {
-            Integer(i) => assert_eq!(i, expected),
+    fn test_boolean_object(obj: Rc<Value>, expected: bool) {
+        match &*obj {
+            &Value::Boolean(b) => assert_eq!(b, expected),
             other => panic!("expected Integer but got {:?}", other),
-        },
-        other => panic!("expected Integer but got {:?}", other),
+        }
     }
-}
 
-fn test_boolean_object(obj: Rc<Value>, expected: bool) {
-    match &*obj {
-        &Value::Boolean(b) => assert_eq!(b, expected),
-        other => panic!("expected Integer but got {:?}", other),
-    }
-}
-
-fn test_null_object(obj: Rc<Value>) {
-    match &*obj {
-        Value::Null => (),
-        other => panic!("expected Null but got {:?}", other),
+    fn test_null_object(obj: Rc<Value>) {
+        match &*obj {
+            Value::Null => (),
+            other => panic!("expected Null but got {:?}", other),
+        }
     }
 }
