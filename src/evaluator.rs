@@ -250,7 +250,7 @@ fn eval_infix_expression(
             InfixOperator::ASTERISK => Ok(Rc::new(Value::Num(l * r))),
             InfixOperator::SLASH => match r {
                 Integer(0) => Err(Error(format!("division by 0: {}/{}", l, r))),
-                Float(0.0) => Err(Error(format!("division by 0: {}/{}", l, r))),
+                Float(f) if f == 0f64 => Err(Error(format!("division by 0: {}/{}", l, r))),
                 _ => Ok(Rc::new(Value::Num(l / r))),
             },
             InfixOperator::LT => Ok(native_bool_to_boolean_object(l < r)),

@@ -497,7 +497,6 @@ mod tests {
     use crate::lexer::lexer::Lexer;
     use crate::parser::tests::ExpectedExprValue::{Bool, Int, Str};
     use crate::parser::Parser;
-    use std::collections::hash_map::RandomState;
     use std::collections::HashMap;
 
     #[test]
@@ -1222,7 +1221,7 @@ mod tests {
                     assert_eq!(pairs.len(), 3);
                     for (key, value) in pairs {
                         match key.as_ref() {
-                            Expression::StringLiteral { value } => (),
+                            Expression::StringLiteral { value: _ } => (),
                             other => panic!("key is not ast.StringLiteral. got {:?}", other),
                         }
                         let expected_value = expected[key.to_string().as_str()];
@@ -1289,7 +1288,7 @@ mod tests {
                     assert_eq!(pairs.len(), 3);
                     for (key, value) in pairs {
                         match key.as_ref() {
-                            Expression::StringLiteral { value } => (),
+                            Expression::StringLiteral { value: _ } => (),
                             other => panic!("key is not ast.StringLiteral. got {:?}", other),
                         }
                         let test_fn = expected
