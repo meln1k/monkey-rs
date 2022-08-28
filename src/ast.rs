@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-
 #[derive(PartialEq, Debug, Clone)]
 pub enum Statement {
     Let(LetStatement),

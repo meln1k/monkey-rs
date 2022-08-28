@@ -308,9 +308,9 @@ fn eval_minus_operator_expression(right: Rc<Value>) -> EvalResult {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use crate::lexer::lexer::Lexer;
     use crate::parser::Parser;
-    use super::*;
 
     #[test]
     fn test_eval_integer_expr() {

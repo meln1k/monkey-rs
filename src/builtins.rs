@@ -26,8 +26,8 @@ pub fn builtins(name: &str) -> Option<Rc<Value>> {
     }
 }
 
-pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>>) -> EvalResult {
-    match builin {
+pub fn apply_builtin_function(builtin: &BuiltinFunction, arguments: Vec<Rc<Value>>) -> EvalResult {
+    match builtin {
         BuiltinFunction::Len => {
             if arguments.len() != 1 {
                 wrong_nr_of_args_msg(arguments.len(), 1)?;
@@ -39,7 +39,7 @@ pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>
                 Value::Array(elems) => {
                     Ok(Rc::new(Value::Num(Numeric::Integer(elems.len() as i64))))
                 }
-                other => wrong_arg_error_msg(builin, other),
+                other => wrong_arg_error_msg(builtin, other),
             }
         }
         BuiltinFunction::First => {
@@ -50,7 +50,7 @@ pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>
                 Value::Array(elems) => {
                     Ok(Rc::clone(elems.first().unwrap_or(&Rc::new(Value::Null))))
                 }
-                other => wrong_arg_error_msg(builin, other),
+                other => wrong_arg_error_msg(builtin, other),
             }
         }
         BuiltinFunction::Last => {
@@ -59,7 +59,7 @@ pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>
             }
             match &*arguments[0] {
                 Value::Array(elems) => Ok(Rc::clone(elems.last().unwrap_or(&Rc::new(Value::Null)))),
-                other => wrong_arg_error_msg(builin, other),
+                other => wrong_arg_error_msg(builtin, other),
             }
         }
         BuiltinFunction::Rest => {
@@ -73,7 +73,7 @@ pub fn apply_builtin_function(builin: &BuiltinFunction, arguments: Vec<Rc<Value>
                         .map_or(Value::Null, |s| Value::Array(s.to_vec()));
                     Ok(Rc::new(result))
                 }
-                other => wrong_arg_error_msg(builin, other),
+                other => wrong_arg_error_msg(builtin, other),
             }
         }
         BuiltinFunction::Push => {
