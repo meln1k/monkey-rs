@@ -2,8 +2,9 @@ use crate::environment::Environment;
 use crate::evaluator;
 use crate::lexer::lexer::Lexer;
 use crate::parser::Parser;
+use crate::object::Value;
 use std::cell::RefCell;
-use std::io;
+use std::io::{self, Write};
 use std::rc::Rc;
 
 static PROMT: &str = ">> ";
@@ -39,15 +40,18 @@ impl Repl {
 
         let output = match parser.parse_program() {
             Ok(program) => match evaluator::eval(program, Rc::clone(&self.environment)) {
-                Ok(obj) => format!("{}", obj),
-                Err(err) => format!("evaluation error: {}", err),
+                Ok(obj) => match *obj {
+                    Value::Null => None,
+                    _ => Some(format!("{}", obj))                    
+                }
+                Err(err) => Some(format!("evaluation error: {}", err)),
             },
             Err(errs) => {
                 let mut errors_str = String::new();
                 for err in errs {
                     errors_str.push_str(&format!("{}", err));
                 }
-                errors_str
+                Some(errors_str)
             }
         };
 
@@ -55,7 +59,7 @@ impl Repl {
             self.buffer.clear();
         }
 
-        return Some(output)
+        return output
 
     }
 }
@@ -70,7 +74,8 @@ pub fn start() {
     loop {
 
         if !&repl.in_multiline_statement {
-            println!("{}", PROMT);
+            print!("{}", PROMT);
+            io::stdout().flush().unwrap();
         }
 
         let mut buffer = String::new();
