@@ -2,58 +2,89 @@ use crate::environment::Environment;
 use crate::evaluator;
 use crate::lexer::lexer::Lexer;
 use crate::parser::Parser;
+use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
 
 static PROMT: &str = ">> ";
 
+pub struct Repl {
+    buffer: String,
+    environment: Rc<RefCell<Environment>>,
+    in_multiline_statement: bool,
+}
+
+
+impl Repl {
+    pub fn new() -> Repl {
+        Repl { buffer: String::new(), environment: Environment::new(), in_multiline_statement: false }
+    }
+
+    pub fn eval(&mut self, incoming_line: &str) -> Option<String> {
+        self.buffer.push_str(incoming_line);
+
+        if is_even_parenthesis(&self.buffer).is_err() {
+            self.in_multiline_statement = false;
+            return Some("evaluation error: wrong order of braces".to_owned())
+        }
+
+        if !is_even_parenthesis(&self.buffer).unwrap() {
+            self.in_multiline_statement = true;
+            return None
+        }
+
+        self.in_multiline_statement = false;
+        let lexer = Lexer::new(&self.buffer);
+        let parser = Parser::new(lexer);
+
+        let output = match parser.parse_program() {
+            Ok(program) => match evaluator::eval(program, Rc::clone(&self.environment)) {
+                Ok(obj) => format!("{}", obj),
+                Err(err) => format!("evaluation error: {}", err),
+            },
+            Err(errs) => {
+                let mut errors_str = String::new();
+                for err in errs {
+                    errors_str.push_str(&format!("{}", err));
+                }
+                errors_str
+            }
+        };
+
+        if !self.in_multiline_statement {
+            self.buffer.clear();
+        }
+
+        return Some(output)
+
+    }
+}
+
+
 pub fn start() {
-    let mut buffer = String::new();
 
     let stdin = io::stdin();
 
-    let environment = Environment::new();
-
-    let mut in_multiline_statement = false;
+    let mut repl = Repl::new();
 
     loop {
-        if !in_multiline_statement {
+
+        if !&repl.in_multiline_statement {
             println!("{}", PROMT);
         }
 
+        let mut buffer = String::new();
         match stdin.read_line(&mut buffer) {
-            Ok(_) if is_even_parenthesis(buffer.as_str()).is_err() => {
-                in_multiline_statement = false;
-                println!("evaluation error: wrong order of braces")
-            }
-            Ok(_) if !is_even_parenthesis(buffer.as_str()).unwrap() => {
-                in_multiline_statement = true
-            }
             Ok(_) => {
-                in_multiline_statement = false;
-                let lexer = Lexer::new(&buffer);
-                let parser = Parser::new(lexer);
-
-                match parser.parse_program() {
-                    Ok(program) => match evaluator::eval(program, Rc::clone(&environment)) {
-                        Ok(obj) => println!("{}", obj),
-                        Err(err) => println!("evaluation error: {}", err),
-                    },
-                    Err(errs) => {
-                        for err in errs {
-                            println!("{}", err)
-                        }
-                    }
-                };
+                match repl.eval(&buffer) {
+                    Some(output) => println!("{}", output),
+                    None => continue
+                }
             }
             Err(err) => {
                 println!("{:?}", err);
                 return;
             }
-        }
-
-        if !in_multiline_statement {
-            buffer.clear();
         }
     }
 }
