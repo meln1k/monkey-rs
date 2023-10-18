@@ -1,13 +1,18 @@
-use crate::environment::Environment;
-use crate::evaluator;
-use crate::lexer::lexer::Lexer;
-use crate::parser::Parser;
-use crate::object::Value;
+mod ast;
+mod builtins;
+mod environment;
+mod evaluator;
+mod lexer;
+mod object;
+mod parser;
+
+use environment::Environment;
+use lexer::lexer::Lexer;
+use parser::Parser;
+use object::Value;
 use std::cell::RefCell;
-use std::io::{self, Write};
 use std::rc::Rc;
 
-static PROMT: &str = ">> ";
 
 pub struct Repl {
     buffer: String,
@@ -19,6 +24,10 @@ pub struct Repl {
 impl Repl {
     pub fn new() -> Repl {
         Repl { buffer: String::new(), environment: Environment::new(), in_multiline_statement: false }
+    }
+
+    pub fn can_show_prompt(&self) -> bool {
+        !self.in_multiline_statement
     }
 
     pub fn eval(&mut self, incoming_line: &str) -> Option<String> {
@@ -61,36 +70,6 @@ impl Repl {
 
         return output
 
-    }
-}
-
-
-pub fn start() {
-
-    let stdin = io::stdin();
-
-    let mut repl = Repl::new();
-
-    loop {
-
-        if !&repl.in_multiline_statement {
-            print!("{}", PROMT);
-            io::stdout().flush().unwrap();
-        }
-
-        let mut buffer = String::new();
-        match stdin.read_line(&mut buffer) {
-            Ok(_) => {
-                match repl.eval(&buffer) {
-                    Some(output) => println!("{}", output),
-                    None => continue
-                }
-            }
-            Err(err) => {
-                println!("{:?}", err);
-                return;
-            }
-        }
     }
 }
 
