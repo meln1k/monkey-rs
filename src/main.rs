@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use interpreter::Repl;
+use interpreter::repl::Repl;
 
 fn main() {
     println!("Hello user! This is the Monkey programming language version {}!", env!("CARGO_PKG_VERSION"));

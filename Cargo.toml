@@ -4,5 +4,13 @@ version = "0.1.0"
 authors = ["Nikita Melkozerov <n.melkozerov@gmail.com>"]
 edition = "2018"
 
+[features]
+wasm = ["wasm-bindgen", "wee_alloc"]
+
 [dependencies]
 byteorder = "1.4.3"
+wasm-bindgen = { version = "0.2.87", optional = true}
+wee_alloc = { version = "0.4.5", optional = true}
+
+[lib]
+crate-type = ["cdylib", "rlib"]
