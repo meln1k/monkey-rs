@@ -14,6 +14,27 @@ pub enum BuiltinFunction {
     Puts,
 }
 
+#[cfg(target_family = "wasm")]
+mod io_utils {
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    extern "C" {
+        fn on_print(f: &str);
+    }
+
+    pub fn puts(s: &str) {
+        on_print(s);
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+mod io_utils {
+    pub fn puts(s: &str) {
+        println!("{}", s);
+    }
+}
+
 pub fn builtins(name: &str) -> Option<Rc<Value>> {
     match name {
         "len" => Some(Rc::new(BuiltinFunc(BuiltinFunction::Len))),
@@ -94,7 +115,7 @@ pub fn apply_builtin_function(builtin: &BuiltinFunction, arguments: Vec<Rc<Value
         }
         BuiltinFunction::Puts => {
             for arg in arguments {
-                println!("{}", arg);
+                io_utils::puts(format!("{}", arg).as_str());
             }
             Ok(Rc::new(Value::Null))
         }
